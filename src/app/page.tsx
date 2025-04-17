@@ -25,6 +25,14 @@ interface StatusCount {
   count: number;
 }
 
+// Define the type for bookings nearing deadline
+interface ApproachingDeadlineBooking {
+    id: string;
+    booking_reference: string | null;
+    deadline: string | null;
+    customers: { company_name: string }[] | null;
+}
+
 // The page component is now async to allow data fetching
 export default async function DashboardPage() {
   const supabase = createSimpleServerClient();
@@ -103,12 +111,12 @@ export default async function DashboardPage() {
           <CardContent>
             {approachingDeadlines && approachingDeadlines.length > 0 ? (
               <ul className="space-y-2">
-                {approachingDeadlines.map((booking: any) => (
+                {approachingDeadlines.map((booking: ApproachingDeadlineBooking) => (
                   <li key={booking.id} className="text-sm">
                     <Link href={`/bookings/${booking.id}`} className="hover:underline font-medium">
                       {booking.booking_reference || 'No Ref'}
                     </Link>
-                    <span className="text-muted-foreground ml-2"> ({booking.customers?.company_name || 'Unknown Co.'})</span>
+                    <span className="text-muted-foreground ml-2"> ({booking.customers?.[0]?.company_name || 'Unknown Co.'})</span>
                     <span className="block text-xs text-muted-foreground">Deadline: {formatDate(booking.deadline)}</span>
                   </li>
                 ))}
