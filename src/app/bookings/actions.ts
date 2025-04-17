@@ -4,8 +4,8 @@ import { z } from 'zod';
 import { createSimpleServerClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { bookingFormSchema, BookingFormData } from '@/lib/schemas';
-import type { BookingStatus, BookingType } from '@/types/database';
+import { bookingFormSchema, BookingFormData, updateBookingSchema, UpdateBookingFormData } from '@/lib/schemas';
+import type { BookingStatus } from '@/types/database';
 
 // Helper function to determine overall booking status from sectors
 function determineOverallStatus(sectors: BookingFormData['sectors']): BookingStatus {
@@ -39,9 +39,9 @@ export async function addBooking(prevState: BookingActionState | undefined, form
   try {
     const sectorsJson = formData.get('sectorsJson') as string;
     // Parse sectors, converting travel_date strings back to Date objects for Zod
-    const rawSectors = (JSON.parse(sectorsJson) as any[]).map(s => ({
+    const rawSectors = (JSON.parse(sectorsJson) as Record<string, unknown>[]).map(s => ({
       ...s,
-      travel_date: s.travel_date ? new Date(s.travel_date) : undefined,
+      travel_date: s.travel_date ? new Date(s.travel_date as string) : undefined,
     }));
 
     // Coerce num_pax to number before parsing
@@ -129,17 +129,17 @@ export async function addBooking(prevState: BookingActionState | undefined, form
 export async function updateBooking(bookingId: string, prevState: BookingActionState | undefined, formData: FormData): Promise<BookingActionState> {
   if (!bookingId) return { message: 'Error: Missing booking ID for update.' };
 
-  // 1. Parse and validate the full form data using bookingFormSchema
-  let parsedData: BookingFormData;
+  // 1. Parse and validate the full form data using updateBookingSchema instead of bookingFormSchema
+  let parsedData: UpdateBookingFormData;
   try {
     const sectorsJson = formData.get('sectorsJson') as string;
-    const rawSectors = (JSON.parse(sectorsJson) as any[]).map(s => ({
+    const rawSectors = (JSON.parse(sectorsJson) as Record<string, unknown>[]).map(s => ({
       ...s,
-      travel_date: s.travel_date ? new Date(s.travel_date) : undefined,
+      travel_date: s.travel_date ? new Date(s.travel_date as string) : undefined,
     }));
 
-    // Use the main bookingFormSchema for parsing update data now
-    parsedData = bookingFormSchema.parse({
+    // Use the updateBookingSchema for parsing update data
+    parsedData = updateBookingSchema.parse({
         customer_id: formData.get('customer_id'),
         booking_type: formData.get('booking_type'),
         booking_reference: formData.get('booking_reference'),

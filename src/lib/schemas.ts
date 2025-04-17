@@ -14,7 +14,7 @@ export const predefinedSectorSchema = z.object({
 });
 
 // Updated Zod schema for a single booking sector within the form
-const bookingSectorFormSchema = z.object({
+export const bookingSectorFormSchema = z.object({
     predefined_sector_id: z.string().uuid({ message: "Please select a valid sector."}),
     travel_date: z.date({
         invalid_type_error: "That's not a valid date!",
@@ -23,8 +23,8 @@ const bookingSectorFormSchema = z.object({
     status: z.enum(['Confirmed', 'Waiting List'] as [BookingStatus, ...BookingStatus[]], {
         required_error: "Sector status is required.",
     }),
-    // Passenger count must be at least 1
-    num_pax: z.coerce.number().int({ message: "Must be a whole number." }).min(1, { message: "At least 1 passenger required." }).max(999, { message: "Maximum 999 passengers." }),
+    // Allow zero or negative passenger counts
+    num_pax: z.coerce.number().int({ message: "Must be a whole number." }).max(999, { message: "Maximum 999 passengers." }),
 });
 
 // Updated Zod schema for the main booking form
@@ -57,7 +57,38 @@ export const bookingFormSchema = z.object({
     path: ["sectors"],
 });
 
+// Dedicated schema for updating bookings
+export const updateBookingSchema = z.object({
+    // Booking Details section
+    customer_id: z.string().uuid({ message: "Please select a valid customer."}),
+    booking_type: z.enum(['One-Way', 'Return'] as [BookingType, ...BookingType[]], {
+        required_error: "Booking type is required.",
+    }),
+    // Sectors section (array)
+    sectors: z.array(bookingSectorFormSchema).min(1, { message: "At least one sector is required."}),
+    // Booking Reference section
+    booking_reference: z.string().min(1, { message: "Booking reference is required."}).max(50),
+    deadline: z.date().optional().nullable(),
+}).refine(data => {
+    if (data.booking_type === 'One-Way') {
+      return data.sectors.length === 1;
+    }
+    return true;
+}, {
+    message: "One-Way bookings must have exactly one sector.",
+    path: ["sectors"],
+}).refine(data => {
+     if (data.booking_type === 'Return') {
+      return data.sectors.length === 2;
+    }
+    return true;
+}, {
+    message: "Return bookings must have exactly two sectors.",
+    path: ["sectors"],
+});
+
 // Type for form inference
 export type BookingFormData = z.infer<typeof bookingFormSchema>;
+export type UpdateBookingFormData = z.infer<typeof updateBookingSchema>;
 
 // Add other schemas here as needed 
