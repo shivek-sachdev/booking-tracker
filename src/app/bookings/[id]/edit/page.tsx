@@ -25,7 +25,8 @@ function isPromise(p: unknown): p is Promise<{ id: string }> {
    return (
        typeof p === 'object' &&
        p !== null &&
-       typeof (p as any).then === 'function'
+       'then' in p &&
+       typeof (p as { then: unknown }).then === 'function'
    );
 }
 
