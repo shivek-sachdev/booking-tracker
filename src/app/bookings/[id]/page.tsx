@@ -9,7 +9,6 @@ import { Badge } from "@/components/ui/badge";
 import {
     Table,
     TableBody,
-    TableCaption,
     TableCell,
     TableHead,
     TableHeader,
@@ -29,7 +28,7 @@ function formatDate(dateString: string | null | undefined): string {
   if (!dateString) return "N/A";
   try {
     return new Date(dateString).toLocaleDateString('en-CA'); // YYYY-MM-DD format
-  } catch (e) {
+  } catch {
     return "Invalid Date";
   }
 }
@@ -103,12 +102,18 @@ export default function BookingDetailPage({ params }: BookingDetailPageProps) {
 
          setBooking(bookingResult.data);
          setSectors(sectorsResult.data || []);
-      } catch (error: any) {
-          console.error('Error in fetchData:', error.message);
-          setFetchError(error.message || 'Failed to load booking details.');
-          if (error.message?.toLowerCase().includes('booking not found')) {
-            notFound();
+      } catch (error: unknown) {
+          let errorMessage = 'Failed to load booking details.';
+          if (error instanceof Error) {
+              errorMessage = error.message;
+              console.error('Error in fetchData:', error.message);
+              if (error.message.toLowerCase().includes('booking not found')) {
+                  notFound();
+              }
+          } else {
+              console.error('Unknown error in fetchData:', error);
           }
+          setFetchError(errorMessage);
       } finally {
           setIsLoading(false);
       }

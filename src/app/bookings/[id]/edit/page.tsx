@@ -1,7 +1,7 @@
 import { createSimpleServerClient } from "@/lib/supabase/server";
 import { notFound } from 'next/navigation';
 import { BookingForm } from "@/components/bookings/booking-form";
-import type { Booking, BookingSector, PredefinedSector, Customer, BookingType } from "@/types/database";
+import type { Booking, BookingSector, PredefinedSector, Customer } from "@/types/database";
 
 // Type to represent a BookingSector with its related PredefinedSector data included
 interface PopulatedBookingSector extends BookingSector {

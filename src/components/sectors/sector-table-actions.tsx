@@ -52,8 +52,8 @@ export function SectorTableActions({ sector }: SectorTableActionsProps) {
           <AlertDialogHeader>
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the sector
-              '{sector.origin_code} - {sector.destination_code}'. Associated booking sectors might prevent deletion.
+              This action cannot be undone. This will remove the sector and all associated data (booking sectors).
+              If you&apos;re unsure, consider keeping the sector.
             </AlertDialogDescription>
           </AlertDialogHeader>
           {deleteMessage && (

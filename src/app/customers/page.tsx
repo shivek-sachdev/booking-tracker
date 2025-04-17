@@ -18,7 +18,7 @@ import {
     if (!dateString) return "N/A";
     try {
       return new Date(dateString).toLocaleDateString('en-CA'); // YYYY-MM-DD format
-    } catch (e) {
+    } catch {
       return "Invalid Date";
     }
   }

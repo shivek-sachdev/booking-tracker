@@ -1,11 +1,8 @@
 'use server';
 
-import { z } from 'zod';
 import { createSimpleServerClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
-import { redirect } from 'next/navigation'; // Although we might just revalidate
-import type { Customer } from '@/types/database';
-import { customerSchema } from '@/lib/schemas'; // Import schema from the new location
+import { customerSchema } from '@/lib/schemas';
 
 // Zod schema for validating customer form data
 // MOVED to src/lib/schemas.ts

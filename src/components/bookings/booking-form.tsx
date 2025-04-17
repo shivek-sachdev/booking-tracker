@@ -3,25 +3,22 @@
 import { useState, useTransition, useEffect } from 'react';
 import { useForm, useFieldArray, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 import { useRouter } from 'next/navigation'; // For potential navigation
 import { format } from "date-fns";
 import { Calendar as CalendarIcon, Trash2, PlusCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Calendar } from "@/components/ui/calendar";
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils"; // For merging classNames
 import { bookingFormSchema, BookingFormData } from '@/lib/schemas';
 import { addBooking, updateBooking, type BookingActionState } from '@/app/bookings/actions'; // Use addBooking directly
-import type { Customer, PredefinedSector, BookingStatus, BookingType, Booking } from '@/types/database';
-import { createClient } from '@/lib/supabase/client'; // Use client-side client
+import type { Customer, PredefinedSector, BookingStatus } from '@/types/database';
 
 // Add mode and initialData props
 interface BookingFormProps {
@@ -139,7 +136,7 @@ export function BookingForm({
             result.errors.forEach(issue => {
               const path = issue.path.join('.');
               if (path) {
-                form.setError(path as any, { type: 'server', message: issue.message });
+                form.setError(path as keyof BookingFormData, { type: 'server', message: issue.message });
               }
             });
           } 
@@ -149,8 +146,9 @@ export function BookingForm({
           } else {
             setStatusMessage(`Failed to ${mode === 'add' ? 'save' : 'update'} booking.`); // Simplified message
           }
-        } catch (error) {
-          console.error(`Error submitting form in ${mode} mode:`, error);
+        } catch (error: unknown) {
+          const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+          console.error(`Error submitting form in ${mode} mode:`, errorMessage);
           setStatusMessage(`Failed to ${mode === 'add' ? 'save' : 'update'} booking. Please try again.`); // Simplified message
         }
       });

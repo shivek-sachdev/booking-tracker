@@ -13,12 +13,12 @@ import type { Booking } from "@/types/database";
 import Link from 'next/link';
 import { Badge } from "@/components/ui/badge"; // For status display
 
-// Helper to format date (reuse from other pages)
+// Helper to format date
 function formatDate(dateString: string | null | undefined): string {
   if (!dateString) return "N/A";
   try {
     return new Date(dateString).toLocaleDateString('en-CA'); // YYYY-MM-DD format
-  } catch (e) {
+  } catch {
     return "Invalid Date";
   }
 }

@@ -59,8 +59,8 @@ export function CustomerTableActions({ customer }: CustomerTableActionsProps) {
           <AlertDialogHeader>
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the customer
-              '{customer.company_name}'. Associated bookings might prevent deletion.
+              This action cannot be undone. This will remove the customer and all associated data.
+              If you&apos;re unsure, consider inactivating the customer instead.
             </AlertDialogDescription>
           </AlertDialogHeader>
           {deleteMessage && (
