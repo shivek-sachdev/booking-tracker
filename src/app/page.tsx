@@ -1,103 +1,162 @@
-import Image from "next/image";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { createSimpleServerClient } from "@/lib/supabase/server";
+import type { Booking, BookingStatus } from "@/types/database";
+import Link from 'next/link';
 
-export default function Home() {
+// Helper function to format dates (optional, adjust as needed)
+function formatDate(dateString: string | null | undefined): string {
+  if (!dateString) return "N/A";
+  try {
+    return new Date(dateString).toLocaleDateString('en-CA'); // YYYY-MM-DD format
+  } catch (e) {
+    return "Invalid Date";
+  }
+}
+
+// The page component is now async to allow data fetching
+export default async function DashboardPage() {
+  const supabase = createSimpleServerClient();
+
+  // --- Fetch Data --- (Error handling omitted for brevity)
+
+  // 1. Bookings nearing deadline (e.g., within next 7 days, not confirmed)
+  const sevenDaysFromNow = new Date();
+  sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
+  const { data: approachingDeadlines, error: deadlineError } = await supabase
+    .from("bookings")
+    .select("id, booking_reference, deadline, customers ( company_name )") // Fetch customer name too
+    .lt("deadline", sevenDaysFromNow.toISOString().split('T')[0]) // Less than 7 days from now
+    .gte("deadline", new Date().toISOString().split('T')[0]) // Greater than or equal to today
+    .neq("status", 'Confirmed' as BookingStatus) // Not confirmed
+    .order("deadline", { ascending: true })
+    .limit(5);
+  if (deadlineError) console.error("Deadline fetch error:", deadlineError.message);
+
+  // 2. Total Bookings counts by status - USE RPC
+  const { data: countsData, error: countError } = await supabase
+    .rpc('get_booking_counts_by_status') // Call the database function
+    .returns<Array<{ status: BookingStatus; count: number }>>(); 
+
+   if (countError) console.error("Count fetch error:", countError ? countError.message : 'Unknown error');
+
+   // Initialize counts
+   let bookingCounts = {
+    total: 0,
+    confirmed: 0,
+    waitingList: 0,
+   };
+
+   // Process counts ONLY if data is an array and not an error object
+   if (!countError && Array.isArray(countsData)) {
+        bookingCounts = {
+            total: countsData.reduce((sum: number, item: { count: number }) => sum + item.count, 0),
+            confirmed: countsData.find((c: { status: BookingStatus }) => c.status === 'Confirmed')?.count ?? 0,
+            waitingList: countsData.find((c: { status: BookingStatus }) => c.status === 'Waiting List')?.count ?? 0,
+       };
+   } else if (countsData && !Array.isArray(countsData)) {
+       // Log if the RPC returned something unexpected in the data field
+       console.error("Unexpected data format from get_booking_counts_by_status RPC:", countsData);
+   }
+
+  // 3. Recent Activity (latest 5 bookings)
+  const { data: recentBookings, error: recentError } = await supabase
+    .from("bookings")
+    .select("id, booking_reference, status, created_at, customers ( company_name )")
+    .order("created_at", { ascending: false })
+    .limit(5)
+    .returns<Array<Booking & { customers: { company_name: string } | null }>>(); // Type assertion
+
+  if (recentError) console.error("Recent fetch error:", recentError.message);
+
+  // --- Render Dashboard --- 
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+    <div>
+      <h1 className="text-2xl font-semibold mb-6">Dashboard</h1>
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        {/* Card 1: Bookings Nearing Deadline */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Approaching Deadlines</CardTitle>
+            <CardDescription>Bookings needing attention soon</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {approachingDeadlines && approachingDeadlines.length > 0 ? (
+              <ul className="space-y-2">
+                {approachingDeadlines.map((booking: any) => (
+                  <li key={booking.id} className="text-sm">
+                    <Link href={`/bookings/${booking.id}`} className="hover:underline font-medium">
+                      {booking.booking_reference || 'No Ref'}
+                    </Link>
+                    <span className="text-muted-foreground ml-2"> ({booking.customers?.company_name || 'Unknown Co.'})</span>
+                    <span className="block text-xs text-muted-foreground">Deadline: {formatDate(booking.deadline)}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                (No bookings nearing deadline currently)
+              </p>
+            )}
+             {deadlineError && <p className="text-sm text-red-500 mt-2">Error loading deadlines.</p>}
+          </CardContent>
+        </Card>
+
+        {/* Card 2: Total Bookings */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Total Bookings</CardTitle>
+            <CardDescription>Overall booking statistics</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-1 text-sm">
+             {countError ? (
+                 <p className="text-sm text-red-500">Error loading counts.</p>
+             ) : (
+                 <>
+                    <p>Total: <span className="font-medium">{bookingCounts.total}</span></p>
+                    <p>Confirmed: <span className="font-medium">{bookingCounts.confirmed}</span></p>
+                    <p>Waiting List: <span className="font-medium">{bookingCounts.waitingList}</span></p>
+                 </>
+             )}
+          </CardContent>
+        </Card>
+
+        {/* Card 3: Recent Activity */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent Activity</CardTitle>
+            <CardDescription>Latest booking updates</CardDescription>
+          </CardHeader>
+          <CardContent>
+           {recentBookings && recentBookings.length > 0 ? (
+               <ul className="space-y-2">
+                {recentBookings.map((booking) => (
+                  <li key={booking.id} className="text-sm">
+                     <Link href={`/bookings/${booking.id}`} className="hover:underline font-medium">
+                       {booking.booking_reference || 'No Ref'}
+                     </Link>
+                     <span className="text-muted-foreground ml-2">({booking.customers?.company_name || 'Unknown Co.'}) - {booking.status}</span>
+                     <span className="block text-xs text-muted-foreground">Created: {formatDate(booking.created_at)}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                (No recent activity)
+              </p>
+            )}
+             {recentError && <p className="text-sm text-red-500 mt-2">Error loading recent activity.</p>}
+          </CardContent>
+        </Card>
+
+      </div>
     </div>
   );
 }
