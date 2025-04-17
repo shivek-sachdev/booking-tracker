@@ -2,7 +2,6 @@ import { createSimpleServerClient } from "@/lib/supabase/server";
 import { notFound } from 'next/navigation';
 import { BookingForm } from "@/components/bookings/booking-form";
 import type { Booking, BookingSector, PredefinedSector, Customer } from "@/types/database";
-import { use } from 'react';
 
 // Type to represent a BookingSector with its related PredefinedSector data included
 interface PopulatedBookingSector extends BookingSector {
@@ -20,9 +19,14 @@ interface EditBookingPageProps {
     params: { id: string } | Promise<{ id: string }>;
 }
 
+// Type guard to check if params is a Promise
+function isPromise(p: any): p is Promise<{ id: string }> {
+   return p && typeof p.then === 'function';
+}
+
 export default async function EditBookingPage({ params }: EditBookingPageProps) {
-    // Use the 'use' hook to resolve params if it's a promise
-    const resolvedParams = use(params as Promise<{ id: string }>);
+    // Await params if it's a promise, otherwise use it directly
+    const resolvedParams = isPromise(params) ? await params : params;
     const { id } = resolvedParams;
     
     const supabase = createSimpleServerClient();
