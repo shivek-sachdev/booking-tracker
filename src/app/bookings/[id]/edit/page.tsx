@@ -20,8 +20,13 @@ interface EditBookingPageProps {
 }
 
 // Type guard to check if params is a Promise
-function isPromise(p: any): p is Promise<{ id: string }> {
-   return p && typeof p.then === 'function';
+function isPromise(p: unknown): p is Promise<{ id: string }> {
+   // More robust check for promise-like structure with unknown
+   return (
+       typeof p === 'object' &&
+       p !== null &&
+       typeof (p as any).then === 'function'
+   );
 }
 
 export default async function EditBookingPage({ params }: EditBookingPageProps) {
