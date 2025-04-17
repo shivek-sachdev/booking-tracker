@@ -16,25 +16,20 @@ interface FullBookingEditData extends Booking {
 
 // Update params type to be more direct for Next.js App Router
 interface EditBookingPageProps {
-    params: { id: string } | Promise<{ id: string }>;
-}
-
-// Type guard to check if params is a Promise
-function isPromise(p: unknown): p is Promise<{ id: string }> {
-   // More robust check for promise-like structure with unknown
-   return (
-       typeof p === 'object' &&
-       p !== null &&
-       'then' in p &&
-       typeof (p as { then: unknown }).then === 'function'
-   );
+    // Match exactly the type expected by Next.js 15/React 19
+    params: Promise<{ id: string }> | undefined;
 }
 
 export default async function EditBookingPage({ params }: EditBookingPageProps) {
-    // Await params if it's a promise, otherwise use it directly
-    const resolvedParams = isPromise(params) ? await params : params;
-    const { id } = resolvedParams;
+    // Handle both Promise and undefined cases
+    if (!params) {
+        throw new Error("Missing page parameters");
+    }
     
+    // We know params is a Promise at this point
+    const resolvedParams = await params;
+    const { id } = resolvedParams;
+
     const supabase = createSimpleServerClient();
 
     // Fetch full booking data, customer list, and predefined sectors list
