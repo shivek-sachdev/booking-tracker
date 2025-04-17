@@ -2,6 +2,7 @@ import { createSimpleServerClient } from "@/lib/supabase/server";
 import { notFound } from 'next/navigation';
 import { BookingForm } from "@/components/bookings/booking-form";
 import type { Booking, BookingSector, PredefinedSector, Customer } from "@/types/database";
+import { use } from 'react';
 
 // Type to represent a BookingSector with its related PredefinedSector data included
 interface PopulatedBookingSector extends BookingSector {
@@ -16,12 +17,13 @@ interface FullBookingEditData extends Booking {
 
 // Update params type to be more direct for Next.js App Router
 interface EditBookingPageProps {
-    params: { id: string };
+    params: { id: string } | Promise<{ id: string }>;
 }
 
 export default async function EditBookingPage({ params }: EditBookingPageProps) {
-    // Get ID directly from params, no need for use() hook
-    const { id } = params;
+    // Use the 'use' hook to resolve params if it's a promise
+    const resolvedParams = use(params as Promise<{ id: string }>);
+    const { id } = resolvedParams;
     
     const supabase = createSimpleServerClient();
 
@@ -58,7 +60,8 @@ export default async function EditBookingPage({ params }: EditBookingPageProps) 
 
     // Type guard to ensure booking is not null and has the expected structure
     if (error || !booking || !booking.booking_sectors) {
-        console.error("Error fetching full data for edit page:", error?.message || "Booking data not found");
+        const errorMessage = error instanceof Error ? error.message : "Booking data not found or error fetching related data";
+        console.error("Error fetching full data for edit page:", errorMessage);
         notFound(); 
     }
     
@@ -81,9 +84,10 @@ export default async function EditBookingPage({ params }: EditBookingPageProps) 
         <div>
             <h1 className="text-2xl font-semibold mb-6">Edit Booking: {booking.booking_reference || `ID ${booking.id.substring(0, 8)}...`}</h1>
             
+            {/* Display error message if fetch failed, ensuring type safety */}
             {error && (
-                <p className="text-red-500 mb-4">Error loading data: {error.message}</p>
-            )}
+                 <p className="text-red-500 mb-4">Error loading data: {error instanceof Error ? error.message : 'An unknown error occurred'}</p>
+             )}
 
             {!error && booking && (
                 <BookingForm 
