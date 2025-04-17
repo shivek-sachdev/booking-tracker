@@ -35,7 +35,8 @@ function formatDate(dateString: string | null | undefined): string {
 
 // Props for the page component, including URL parameters
 interface BookingDetailPageProps {
-    params: { id: string } | Promise<{ id: string }>; // Updated to handle Promise type
+    // Match exactly the type expected by Next.js 15/React 19
+    params: Promise<{ id: string }> | undefined;
 }
 
 interface PopulatedBooking extends Booking {
@@ -43,9 +44,15 @@ interface PopulatedBooking extends Booking {
 }
 
 export default function BookingDetailPage({ params }: BookingDetailPageProps) {
-  // Unwrap params before accessing its properties
-  const unwrappedParams = use(params as Promise<{id: string}>);
+  // Handle potential undefined params and unwrap the promise
+  if (!params) {
+    throw new Error("Missing page parameters");
+  }
+  
+  // Unwrap params using the use hook (since this is NOT an async function)
+  const unwrappedParams = use(params);
   const { id } = unwrappedParams;
+  
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
