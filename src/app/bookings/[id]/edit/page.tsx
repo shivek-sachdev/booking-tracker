@@ -65,8 +65,12 @@ export default async function EditBookingPage({ params }: EditBookingPageProps) 
 
     // Type guard to ensure booking is not null and has the expected structure
     if (error || !booking || !booking.booking_sectors) {
-        const errorMessage = error instanceof Error ? error.message : "Booking data not found or error fetching related data";
-        console.error("Error fetching full data for edit page:", errorMessage);
+        // Log the specific error before calling notFound()
+        let logMessage = "Booking data not found or invalid.";
+        if (error) {
+            logMessage = error instanceof Error ? error.message : 'An unknown fetch error occurred';
+        }
+        console.error("Error fetching full data for edit page:", logMessage);
         notFound(); 
     }
     
@@ -89,10 +93,14 @@ export default async function EditBookingPage({ params }: EditBookingPageProps) 
         <div>
             <h1 className="text-2xl font-semibold mb-6">Edit Booking: {booking.booking_reference || `ID ${booking.id.substring(0, 8)}...`}</h1>
             
-            {/* Display error message if fetch failed, ensuring type safety */}
-            {error && (
-                 <p className="text-red-500 mb-4">Error loading data: {error instanceof Error ? error.message : 'An unknown error occurred'}</p>
-             )}
+            {/* Error display in JSX - This part should ideally not be reached if error exists due to notFound(),
+                but adding a simple message just in case. The complex check is removed. */}
+            {/* {error && (
+                 <p className="text-red-500 mb-4">Error loading data</p> 
+            )} */}
+            {/* If we absolutely need to display the error message, it would require more complex state management
+                to capture the error *before* notFound is called. For now, removing the display block
+                as notFound() handles the user flow. */}
 
             {!error && booking && (
                 <BookingForm 
