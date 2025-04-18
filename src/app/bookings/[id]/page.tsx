@@ -90,7 +90,7 @@ export default function BookingDetailPage({ params }: BookingDetailPageProps) {
 
          const [bookingResult, sectorsResult] = await Promise.all([bookingPromise, sectorsPromise]);
 
-         // --- Perform all checks first --- 
+         // --- Check for errors first --- 
          if (bookingResult.error) {
             console.error("Error fetching booking:", bookingResult.error);
             if (bookingResult.error.code === 'PGRST116') {
@@ -104,13 +104,18 @@ export default function BookingDetailPage({ params }: BookingDetailPageProps) {
             throw sectorsResult.error;
          }
 
-         if (!bookingResult.data) {
-             throw new Error("Booking not found (data is null).");
+         // --- If no errors, extract data --- 
+         const bookingData = bookingResult.data;
+         const sectorsData = sectorsResult.data;
+
+         // --- Check if booking data is actually present --- 
+         if (!bookingData) {
+             throw new Error("Booking data is null after successful fetch.");
          }
 
-         // --- If all checks passed, set state --- 
-         setBooking(bookingResult.data);
-         setSectors(sectorsResult.data || []);
+         // --- Finally, set state --- 
+         setBooking(bookingData);
+         setSectors(sectorsData || []); // sectorsData can be null or [], default to []
       } catch (error: unknown) {
           let errorMessage = 'Failed to load booking details.';
           if (error instanceof Error) {
