@@ -2,7 +2,7 @@
 
 import { createSimpleServerClient } from "@/lib/supabase/server";
 import type { Booking, BookingSector, PredefinedSector, Customer } from "@/types/database";
-import { notFound, useRouter } from 'next/navigation';
+import { notFound } from 'next/navigation';
 import { useState, useEffect, use } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";

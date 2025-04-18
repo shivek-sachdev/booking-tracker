@@ -117,7 +117,7 @@ export function BookingForm({
             if (!bookingId) {
                 throw new Error("Booking ID is missing for update.");
             }
-            result = await updateBooking(bookingId, undefined, formData);
+            result = await updateBooking(bookingId, formData);
           } else { // 'add' mode
             result = await addBooking(undefined, formData);
           }

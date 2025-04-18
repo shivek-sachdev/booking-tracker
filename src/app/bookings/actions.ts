@@ -138,7 +138,6 @@ const updateBookingSchema = z.object({
 // Server Action to UPDATE a booking and REPLACE its sectors
 export async function updateBooking(
   bookingId: string,
-  _prevState: BookingActionState | undefined = { message: null },
   formData: FormData
 ): Promise<BookingActionState> {
   if (!bookingId) {
