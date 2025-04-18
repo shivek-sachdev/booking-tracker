@@ -16,7 +16,7 @@ import {
   } from "@/components/ui/table";
 import Link from 'next/link';
 import { Button } from "@/components/ui/button";
-import { deleteBooking } from '../actions';
+import { BookingDeleteDialog } from "@/components/bookings/booking-delete-dialog";
 
 // Type combining BookingSector with nested PredefinedSector details
 interface PopulatedBookingSector extends BookingSector {
@@ -136,24 +136,6 @@ export default function BookingDetailPage({ params }: BookingDetailPageProps) {
     fetchData();
   }, [id]);
 
-  const handleDelete = async () => {
-    setErrorMsg(null);
-    if (!booking) return;
-
-    if (!window.confirm('Are you sure you want to delete this booking?')) {
-        return;
-    }
-
-    startTransition(async () => {
-        const result = await deleteBooking(booking.id);
-        if (result.message === 'Booking deleted successfully.') {
-            router.push('/bookings');
-        } else {
-            setErrorMsg(result.message || 'Failed to delete booking.');
-        }
-    });
-  };
-
   if (isLoading) {
       return <p className="p-4">Loading booking details...</p>;
   }
@@ -176,13 +158,15 @@ export default function BookingDetailPage({ params }: BookingDetailPageProps) {
                 <Link href={`/bookings/${id}/edit`}>
                    <Button variant="outline">Edit Booking</Button>
                 </Link>
-                <Button 
-                    variant="destructive" 
-                    onClick={handleDelete} 
-                    disabled={isPending}
-                >
-                    {isPending ? 'Deleting...' : 'Delete Booking'}
-                </Button>
+                <BookingDeleteDialog 
+                  booking={{ 
+                    id: booking.id, 
+                    booking_reference: booking.booking_reference 
+                  }}
+                  triggerButton={
+                    <Button variant="destructive">Delete Booking</Button>
+                  }
+                />
              </div>
         </div>
 

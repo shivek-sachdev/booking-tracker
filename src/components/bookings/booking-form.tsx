@@ -231,11 +231,17 @@ export function BookingForm({
                                 <SelectTrigger><SelectValue placeholder="Select a customer" /></SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
-                                {customers.map((c) => (
-                                    <SelectItem key={c.id} value={c.id}>
-                                    {c.company_name}
+                                {customers.length > 0 ? (
+                                    customers.map((c) => (
+                                        <SelectItem key={c.id} value={c.id}>
+                                        {c.company_name}
+                                        </SelectItem>
+                                    ))
+                                ) : (
+                                    <SelectItem value="no-customers" disabled>
+                                        No customers available
                                     </SelectItem>
-                                ))}
+                                )}
                                 </SelectContent>
                             </Select>
                             <FormMessage />

@@ -12,6 +12,7 @@ import { createSimpleServerClient } from "@/lib/supabase/server";
 import type { Booking } from "@/types/database";
 import Link from 'next/link';
 import { Badge } from "@/components/ui/badge"; // For status display
+import { BookingDeleteDialog } from "@/components/bookings/booking-delete-dialog";
 
 // Helper to format date
 function formatDate(dateString: string | null | undefined): string {
@@ -26,20 +27,12 @@ function formatDate(dateString: string | null | undefined): string {
 export default async function BookingsPage() {
   const supabase = createSimpleServerClient();
 
-  // Fetch bookings with customer company name
+  // Fetch bookings with customer join
   const { data: bookings, error } = await supabase
     .from('bookings')
-    .select(`
-      id,
-      booking_reference,
-      booking_type,
-      deadline,
-      status,
-      created_at,
-      customers ( company_name ) 
-    `)
+    .select('id, booking_reference, booking_type, status, deadline, created_at, customers(company_name)')
     .order('created_at', { ascending: false })
-    .returns<Booking[]>(); // Type assertion might need adjustment if join structure changes
+    .returns<Booking[]>();
 
   return (
     <div>
@@ -85,11 +78,23 @@ export default async function BookingsPage() {
                 <TableCell>{formatDate(booking.deadline)}</TableCell>
                 <TableCell>{formatDate(booking.created_at)}</TableCell>
                 <TableCell className="text-right">
-                  {/* Link to Booking Detail Page */}
-                  <Button variant="outline" size="sm" asChild>
-                    <Link href={`/bookings/${booking.id}`}>View Details</Link>
-                  </Button>
-                  {/* Add Edit/Delete later if needed */}
+                  <div className="flex justify-end space-x-2">
+                    {/* Link to Booking Detail Page */}
+                    <Button variant="outline" size="sm" asChild>
+                      <Link href={`/bookings/${booking.id}`}>View</Link>
+                    </Button>
+                    
+                    {/* Delete Booking with Confirmation Dialog */}
+                    <BookingDeleteDialog 
+                      booking={{ 
+                        id: booking.id, 
+                        booking_reference: booking.booking_reference 
+                      }}
+                      triggerButton={
+                        <Button variant="destructive" size="sm">Delete</Button>
+                      }
+                    />
+                  </div>
                 </TableCell>
               </TableRow>
             ))
