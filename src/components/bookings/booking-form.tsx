@@ -52,6 +52,7 @@ export function BookingForm({
   const [isPending, startTransition] = useTransition();
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [successBookingId, setSuccessBookingId] = useState<string | null>(null);
 
   const form = useForm<BookingFormData>({
     resolver: zodResolver(bookingFormSchema), 
@@ -82,6 +83,24 @@ export function BookingForm({
           ],
         },
   });
+
+  // Effect to handle redirection after successful form submission
+  useEffect(() => {
+    if (isSuccess) {
+      const redirectTimer = setTimeout(() => {
+        if (mode === 'add') {
+          // For new bookings, go to the booking listing page
+          router.push('/bookings');
+        } else if (bookingId) {
+          // For edits, go to the booking detail page
+          router.push(`/bookings/${bookingId}`);
+        }
+        router.refresh();
+      }, 1000); // Short delay to show success message
+      
+      return () => clearTimeout(redirectTimer);
+    }
+  }, [isSuccess, mode, bookingId, router]);
 
   // Simplified submit handler
   const handleFormSubmit = (event: React.FormEvent<HTMLFormElement>) => {
@@ -126,9 +145,10 @@ export function BookingForm({
           if (result.message?.includes('successfully')) {
             setStatusMessage(result.message);
             setIsSuccess(true);
-            // Remove setTimeout and redirect immediately
-            router.push((mode === 'edit' || mode === 'edit-simple') ? `/bookings/${bookingId}` : '/bookings');
-            router.refresh();
+            if (result.bookingId) {
+              setSuccessBookingId(result.bookingId);
+            }
+            // Navigation is now handled by the useEffect
           } 
           // Handle validation errors from server
           else if (result.errors && result.errors.length > 0) {
