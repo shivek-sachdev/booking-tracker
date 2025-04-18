@@ -90,6 +90,7 @@ export default function BookingDetailPage({ params }: BookingDetailPageProps) {
 
          const [bookingResult, sectorsResult] = await Promise.all([bookingPromise, sectorsPromise]);
 
+         // --- Perform all checks first --- 
          if (bookingResult.error) {
             console.error("Error fetching booking:", bookingResult.error);
             if (bookingResult.error.code === 'PGRST116') {
@@ -107,6 +108,7 @@ export default function BookingDetailPage({ params }: BookingDetailPageProps) {
              throw new Error("Booking not found (data is null).");
          }
 
+         // --- If all checks passed, set state --- 
          setBooking(bookingResult.data);
          setSectors(sectorsResult.data || []);
       } catch (error: unknown) {
