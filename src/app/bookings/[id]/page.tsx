@@ -3,7 +3,7 @@
 import { createSimpleServerClient } from "@/lib/supabase/server";
 import type { Booking, BookingSector, PredefinedSector, Customer } from "@/types/database";
 import { notFound, useRouter } from 'next/navigation';
-import { useState, useTransition, useEffect, use } from 'react';
+import { useState, useEffect, use } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -53,9 +53,6 @@ export default function BookingDetailPage({ params }: BookingDetailPageProps) {
   const unwrappedParams = use(params);
   const { id } = unwrappedParams;
   
-  const router = useRouter();
-  const [isPending, startTransition] = useTransition();
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [booking, setBooking] = useState<PopulatedBooking | null>(null);
   const [sectors, setSectors] = useState<PopulatedBookingSector[] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -169,8 +166,6 @@ export default function BookingDetailPage({ params }: BookingDetailPageProps) {
                 />
              </div>
         </div>
-
-        {errorMsg && <p className="text-red-500 mb-4">Error: {errorMsg}</p>}
 
       <div className="grid gap-6 md:grid-cols-3 mb-6">
          {/* Booking Details Card */}

@@ -3,10 +3,9 @@
 import { z } from 'zod';
 import { createSimpleServerClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
-import { redirect } from 'next/navigation';
 import { bookingFormSchema, BookingFormData } from '@/lib/schemas';
 import type { BookingStatus } from '@/types/database';
-import { format, isValid } from 'date-fns';
+import { format } from 'date-fns';
 
 // Helper function to determine overall booking status from sectors
 function determineOverallStatus(sectors: BookingFormData['sectors']): BookingStatus {
@@ -139,7 +138,7 @@ const updateBookingSchema = z.object({
 // Server Action to UPDATE a booking and REPLACE its sectors
 export async function updateBooking(
   bookingId: string,
-  prevState: BookingActionState | undefined = { message: null },
+  _prevState: BookingActionState | undefined = { message: null },
   formData: FormData
 ): Promise<BookingActionState> {
   if (!bookingId) {
