@@ -52,7 +52,6 @@ export function BookingForm({
   const [isPending, startTransition] = useTransition();
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [isSuccess, setIsSuccess] = useState(false);
-  const [successBookingId, setSuccessBookingId] = useState<string | null>(null);
 
   const form = useForm<BookingFormData>({
     resolver: zodResolver(bookingFormSchema), 
@@ -145,9 +144,6 @@ export function BookingForm({
           if (result.message?.includes('successfully')) {
             setStatusMessage(result.message);
             setIsSuccess(true);
-            if (result.bookingId) {
-              setSuccessBookingId(result.bookingId);
-            }
             // Navigation is now handled by the useEffect
           } 
           // Handle validation errors from server
