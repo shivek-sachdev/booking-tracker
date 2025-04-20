@@ -228,90 +228,92 @@ export default async function BookingsPage() {
         <p className="text-red-500 mb-4">Error loading bookings: {error.message}</p>
       )}
 
-      <Table>
-        <TableCaption>A list of your tracked bookings.</TableCaption>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Reference</TableHead>
-            <TableHead>Customer</TableHead>
-            <TableHead>Sector</TableHead>
-            <TableHead>Type</TableHead>
-            <TableHead>Travel Date</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Deadline</TableHead>
-            <TableHead className="text-right">Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {bookings && bookings.length > 0 ? (
-            bookings.map((booking) => (
-              <TableRow 
-                key={booking.id} 
-                className={isPastDeadline(booking.deadline) ? 'bg-red-50' : ''}
-              >
-                <TableCell className="font-medium">
-                  {booking.booking_reference}
-                </TableCell>
-                <TableCell>{booking.customers?.company_name ?? 'Unknown'}</TableCell>
-                <TableCell>{formatSectorsDisplay(booking)}</TableCell>
-                <TableCell>{booking.booking_type}</TableCell>
-                <TableCell>{formatTravelDates(booking)}</TableCell>
-                <TableCell>
-                    <Badge 
-                        className={cn({
-                            'bg-green-100 text-green-800': booking.status === 'Ticketed',
-                            'bg-red-100 text-red-800': booking.status === 'Cancelled',
-                            'bg-blue-100 text-blue-800': booking.status === 'Confirmed',
-                            'bg-amber-100 text-amber-800': booking.status === 'Waiting List',
-                            'bg-gray-100 text-gray-800': !booking.status || ['Pending', 'Unconfirmed'].includes(booking.status)
-                        })}
-                    >
-                        {booking.status}
-                    </Badge>
-                </TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-1">
-                    {isUrgentDeadline(booking.deadline) && (
-                      <AlertCircle className="h-4 w-4 text-red-600" />
-                    )}
-                    <span className={isPastDeadline(booking.deadline) ? 'text-red-600 font-medium' : ''}>
-                      {formatShortDate(booking.deadline)} 
-                      <span className="text-muted-foreground text-xs ml-1">
-                        {formatDeadlineDifference(booking.deadline)}
+      <div className="overflow-x-auto">
+        <Table>
+          <TableCaption>A list of your tracked bookings.</TableCaption>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Reference</TableHead>
+              <TableHead>Customer</TableHead>
+              <TableHead>Sector</TableHead>
+              <TableHead>Type</TableHead>
+              <TableHead>Travel Date</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Deadline</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {bookings && bookings.length > 0 ? (
+              bookings.map((booking) => (
+                <TableRow 
+                  key={booking.id} 
+                  className={isPastDeadline(booking.deadline) ? 'bg-red-50' : ''}
+                >
+                  <TableCell className="font-medium">
+                    {booking.booking_reference}
+                  </TableCell>
+                  <TableCell>{booking.customers?.company_name ?? 'Unknown'}</TableCell>
+                  <TableCell>{formatSectorsDisplay(booking)}</TableCell>
+                  <TableCell>{booking.booking_type}</TableCell>
+                  <TableCell>{formatTravelDates(booking)}</TableCell>
+                  <TableCell>
+                      <Badge 
+                          className={cn({
+                              'bg-green-100 text-green-800': booking.status === 'Ticketed',
+                              'bg-red-100 text-red-800': booking.status === 'Cancelled',
+                              'bg-blue-100 text-blue-800': booking.status === 'Confirmed',
+                              'bg-amber-100 text-amber-800': booking.status === 'Waiting List',
+                              'bg-gray-100 text-gray-800': !booking.status || ['Pending', 'Unconfirmed'].includes(booking.status)
+                          })}
+                      >
+                          {booking.status}
+                      </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1">
+                      {isUrgentDeadline(booking.deadline) && (
+                        <AlertCircle className="h-4 w-4 text-red-600" />
+                      )}
+                      <span className={isPastDeadline(booking.deadline) ? 'text-red-600 font-medium' : ''}>
+                        {formatShortDate(booking.deadline)} 
+                        <span className="text-muted-foreground text-xs ml-1">
+                          {formatDeadlineDifference(booking.deadline)}
+                        </span>
                       </span>
-                    </span>
-                  </div>
-                </TableCell>
-                <TableCell className="text-right">
-                  <div className="flex justify-end space-x-2">
-                    {/* Link to Booking Detail Page */}
-                    <Button variant="outline" size="sm" asChild>
-                      <Link href={`/bookings/${booking.id}`}>View</Link>
-                    </Button>
-                    
-                    {/* Delete Booking with Confirmation Dialog */}
-                    <BookingDeleteDialog 
-                      booking={{ 
-                        id: booking.id, 
-                        booking_reference: booking.booking_reference || 'No Reference'
-                      }}
-                      triggerButton={
-                        <Button variant="destructive" size="sm">Delete</Button>
-                      }
-                    />
-                  </div>
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex justify-end space-x-2">
+                      {/* Link to Booking Detail Page */}
+                      <Button variant="outline" size="sm" asChild>
+                        <Link href={`/bookings/${booking.id}`}>View</Link>
+                      </Button>
+                      
+                      {/* Delete Booking with Confirmation Dialog */}
+                      <BookingDeleteDialog 
+                        booking={{ 
+                          id: booking.id, 
+                          booking_reference: booking.booking_reference || 'No Reference'
+                        }}
+                        triggerButton={
+                          <Button variant="destructive" size="sm">Delete</Button>
+                        }
+                      />
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell colSpan={8} className="text-center">
+                  No bookings found.
                 </TableCell>
               </TableRow>
-            ))
-          ) : (
-            <TableRow>
-              <TableCell colSpan={8} className="text-center">
-                No bookings found.
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
+            )}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   );
 } 

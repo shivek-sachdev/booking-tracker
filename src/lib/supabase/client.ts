@@ -1,3 +1,5 @@
+'use client';
+
 import { createBrowserClient } from '@supabase/ssr';
 
 // Define a function to create the Supabase client for browser environments

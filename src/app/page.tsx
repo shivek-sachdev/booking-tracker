@@ -283,8 +283,8 @@ export default async function DashboardPage() {
     <div className="container mx-auto p-4 space-y-6">
       <h1 className="text-3xl font-bold mb-6">Dashboard</h1>
       
-      {/* First Row: Total Bookings, Top Customers */}
-      <div className="grid gap-4 md:grid-cols-2">
+      {/* First Row: Total Bookings, Top Customers - Adjusted Grid */}
+      <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Total Bookings</CardTitle>
@@ -321,13 +321,12 @@ export default async function DashboardPage() {
         </Card>
       </div>
 
-      {/* Second Row: Approaching Deadlines Table */}
-      <div>
+      {/* Approaching Deadlines Table Wrapper */}
+      <div className="overflow-x-auto">
         <h2 className="text-xl font-semibold mb-4 flex items-center">
           <Clock className="mr-2 h-5 w-5 text-red-500" /> 
           Approaching & Passed Deadlines
         </h2>
-        
         <Card>
           <CardContent className="p-0">
             <Table>
@@ -401,8 +400,8 @@ export default async function DashboardPage() {
         </Card>
       </div>
 
-      {/* Third Row: Weekly Booking Trends */}
-      <div>
+      {/* Third Row: Weekly Booking Trends - Adjusted Grid */}
+      <div className="grid grid-cols-1"> { /* Always one column, but sets up grid */}
         <Card>
           <CardHeader>
             <CardTitle>Weekly Booking Trends</CardTitle>

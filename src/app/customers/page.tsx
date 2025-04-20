@@ -47,35 +47,37 @@ import {
           <p className="text-red-500 mb-4">Error loading customers: {error.message}</p>
         )}
 
-        <Table>
-          <TableCaption>A list of your registered customers.</TableCaption>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Company Name</TableHead>
-              <TableHead>Created At</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {customers && customers.length > 0 ? (
-              customers.map((customer) => (
-                <TableRow key={customer.id}>
-                  <TableCell>{customer.company_name}</TableCell>
-                  <TableCell>{formatDate(customer.created_at)}</TableCell>
-                  <TableCell className="text-right">
-                    <CustomerTableActions customer={customer} />
+        <div className="overflow-x-auto">
+          <Table>
+            <TableCaption>A list of your registered customers.</TableCaption>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Company Name</TableHead>
+                <TableHead>Created At</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {customers && customers.length > 0 ? (
+                customers.map((customer) => (
+                  <TableRow key={customer.id}>
+                    <TableCell>{customer.company_name}</TableCell>
+                    <TableCell>{formatDate(customer.created_at)}</TableCell>
+                    <TableCell className="text-right">
+                      <CustomerTableActions customer={customer} />
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={3} className="text-center">
+                    No customers found.
                   </TableCell>
                 </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell colSpan={3} className="text-center">
-                  No customers found.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </div>
     );
   } 

@@ -48,39 +48,41 @@ import {
           <p className="text-red-500 mb-4">Error loading sectors: {error.message}</p>
         )}
 
-        <Table>
-          <TableCaption>A list of your predefined flight sectors.</TableCaption>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Origin</TableHead>
-              <TableHead>Destination</TableHead>
-              <TableHead>Description</TableHead>
-              <TableHead>Created At</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {sectors && sectors.length > 0 ? (
-              sectors.map((sector) => (
-                <TableRow key={sector.id}>
-                  <TableCell>{sector.origin_code}</TableCell>
-                  <TableCell>{sector.destination_code}</TableCell>
-                  <TableCell>{sector.description || '-'}</TableCell>
-                  <TableCell>{formatDate(sector.created_at)}</TableCell>
-                  <TableCell className="text-right">
-                    <SectorTableActions sector={sector} />
+        <div className="overflow-x-auto">
+          <Table>
+            <TableCaption>A list of your predefined flight sectors.</TableCaption>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Origin</TableHead>
+                <TableHead>Destination</TableHead>
+                <TableHead>Description</TableHead>
+                <TableHead>Created At</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {sectors && sectors.length > 0 ? (
+                sectors.map((sector) => (
+                  <TableRow key={sector.id}>
+                    <TableCell>{sector.origin_code}</TableCell>
+                    <TableCell>{sector.destination_code}</TableCell>
+                    <TableCell>{sector.description || '-'}</TableCell>
+                    <TableCell>{formatDate(sector.created_at)}</TableCell>
+                    <TableCell className="text-right">
+                      <SectorTableActions sector={sector} />
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center">
+                    No predefined sectors found.
                   </TableCell>
                 </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell colSpan={5} className="text-center">
-                  No predefined sectors found.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </div>
     );
   } 

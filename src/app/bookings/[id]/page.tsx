@@ -227,9 +227,9 @@ export default function BookingDetailPage({ params }: BookingDetailPageProps) {
              </div>
         </div>
 
-      <div className="grid gap-6 md:grid-cols-3 mb-6">
+      <div className="grid gap-6 grid-cols-1 md:grid-cols-3 mb-6">
          {/* Booking Details Card */}
-        <Card className="md:col-span-1">
+        <Card className="col-span-1">
             <CardHeader>
                 <CardTitle>Details</CardTitle>
             </CardHeader>
@@ -260,12 +260,12 @@ export default function BookingDetailPage({ params }: BookingDetailPageProps) {
         </Card>
 
          {/* Sectors Card */}
-         <Card className="md:col-span-2">
+         <Card className="col-span-1 md:col-span-2">
             <CardHeader>
                 <CardTitle>Sectors</CardTitle>
                  <CardDescription>Flights associated with this booking.</CardDescription>
             </CardHeader>
-             <CardContent>
+             <CardContent className="overflow-x-auto">
                 {fetchError && <p className="text-red-500 mb-4">Error loading sectors: {fetchError}</p>}
                 {sectors && Array.isArray(sectors) && sectors.length > 0 ? (
                     <Table>
