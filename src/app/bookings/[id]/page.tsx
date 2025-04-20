@@ -17,6 +17,7 @@ import {
 import Link from 'next/link';
 import { Button } from "@/components/ui/button";
 import { BookingDeleteDialog } from "@/components/bookings/booking-delete-dialog";
+import { cn } from "@/lib/utils"; // For class merging
 
 // Type combining BookingSector with nested PredefinedSector details
 interface PopulatedBookingSector extends BookingSector {
@@ -30,6 +31,65 @@ function formatDate(dateString: string | null | undefined): string {
     return new Date(dateString).toLocaleDateString('en-CA'); // YYYY-MM-DD format
   } catch {
     return "Invalid Date";
+  }
+}
+
+// Helper function to calculate and format deadline difference
+function formatDeadlineDifference(deadline: string | null | undefined): string {
+  if (!deadline) return "No deadline";
+
+  try {
+    const deadlineDate = new Date(deadline);
+    // Set deadline to the end of its day for comparison against the start of today
+    deadlineDate.setHours(23, 59, 59, 999);
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Start of today
+
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1); // Start of tomorrow
+
+    const dayAfterTomorrow = new Date(today);
+    dayAfterTomorrow.setDate(today.getDate() + 2); // Start of the day after tomorrow
+
+    // Check if deadline has passed (is before the start of today)
+    if (deadlineDate.getTime() < today.getTime()) {
+      // Calculate how many days ago it was (using floor for whole days passed)
+      const pastDiffTime = today.getTime() - deadlineDate.getTime();
+      // Add 1 because we compare end of deadline day to start of today
+      const daysOverdue = Math.floor(pastDiffTime / (1000 * 60 * 60 * 24)) + 1;
+      return `(Overdue by ${daysOverdue} day${daysOverdue > 1 ? 's' : ''})`;
+    }
+    // Check if deadline is today (falls between start of today and start of tomorrow)
+    else if (deadlineDate.getTime() < tomorrow.getTime()) {
+      return "(Due today)";
+    }
+    // Check if deadline is tomorrow (falls between start of tomorrow and start of day after)
+    else if (deadlineDate.getTime() < dayAfterTomorrow.getTime()) {
+      return "(Due tomorrow)";
+    }
+    // Otherwise, it's in the future
+    else {
+      const futureDiffTime = deadlineDate.getTime() - today.getTime();
+      // Use ceil to count the current day as one day away if not today/tomorrow
+      const diffDays = Math.ceil(futureDiffTime / (1000 * 60 * 60 * 24));
+      return `(Due in ${diffDays} days)`;
+    }
+  } catch {
+    return "(Invalid date)";
+  }
+}
+
+// Helper function to format short date (e.g., 13APR)
+function formatShortDate(dateString: string | null | undefined): string {
+  if (!dateString) return "N/A";
+  try {
+    const date = new Date(dateString);
+    const day = date.getDate();
+    const month = date.toLocaleString('en-US', { month: 'short' }).toUpperCase();
+    return `${day}${month}`;
+  } catch {
+    return "N/A";
   }
 }
 
@@ -177,10 +237,25 @@ export default function BookingDetailPage({ params }: BookingDetailPageProps) {
                 <p><strong>Customer:</strong> {booking.customers?.company_name ?? 'Unknown'}</p>
                 <p><strong>Reference:</strong> {booking.booking_reference}</p>
                 <p><strong>Type:</strong> {booking.booking_type}</p>
-                <p><strong>Status:</strong> <Badge variant={booking.status === 'Confirmed' ? 'default' : 'secondary'}>{booking.status}</Badge></p>
-                <p><strong>Deadline:</strong> {formatDate(booking.deadline)}</p>
-                <p><strong>Created:</strong> {formatDate(booking.created_at)}</p>
-                 <p><strong>Updated:</strong> {formatDate(booking.updated_at)}</p>
+                <p><strong>Status:</strong> 
+                    <Badge 
+                        className={cn({
+                            'bg-green-100 text-green-800': booking.status === 'Ticketed',
+                            'bg-red-100 text-red-800': booking.status === 'Cancelled',
+                            'bg-blue-100 text-blue-800': booking.status === 'Confirmed',
+                            'bg-amber-100 text-amber-800': booking.status === 'Waiting List',
+                            'bg-gray-100 text-gray-800': !booking.status || ['Pending', 'Unconfirmed'].includes(booking.status)
+                        })}
+                    >
+                        {booking.status}
+                    </Badge>
+                </p>
+                <p>
+                    <strong>Deadline:</strong> {formatDate(booking.deadline)} 
+                    <span className="text-muted-foreground ml-1">
+                        {formatDeadlineDifference(booking.deadline)}
+                    </span>
+                </p>
             </CardContent>
         </Card>
 
@@ -198,6 +273,7 @@ export default function BookingDetailPage({ params }: BookingDetailPageProps) {
                             <TableRow>
                             <TableHead>Origin</TableHead>
                             <TableHead>Destination</TableHead>
+                            <TableHead>Travel Date</TableHead>
                             <TableHead>Flight No.</TableHead>
                             <TableHead>Status</TableHead>
                             <TableHead>Passengers</TableHead>
@@ -208,9 +284,15 @@ export default function BookingDetailPage({ params }: BookingDetailPageProps) {
                             <TableRow key={sector.id}>
                                 <TableCell>{sector.predefined_sectors?.origin_code ?? 'N/A'}</TableCell>
                                 <TableCell>{sector.predefined_sectors?.destination_code ?? 'N/A'}</TableCell>
+                                <TableCell>{formatShortDate(sector.travel_date)}</TableCell>
                                 <TableCell>{sector.flight_number || '-'}</TableCell>
                                 <TableCell>
-                                    <Badge variant={sector.status === 'Confirmed' ? 'default' : 'secondary'}>
+                                    <Badge 
+                                        className={cn({
+                                            'bg-blue-100 text-blue-800': sector.status === 'Confirmed',
+                                            'bg-amber-100 text-amber-800': sector.status === 'Waiting List',
+                                        })}
+                                    >
                                         {sector.status}
                                     </Badge>
                                 </TableCell>
@@ -220,7 +302,11 @@ export default function BookingDetailPage({ params }: BookingDetailPageProps) {
                         </TableBody>
                     </Table>
                 ) : (
-                     !fetchError && <p className="text-sm text-muted-foreground">No sectors found for this booking.</p>
+                    <TableRow>
+                        <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                            No sectors found for this booking.
+                        </TableCell>
+                    </TableRow>
                 )}
             </CardContent>
          </Card>

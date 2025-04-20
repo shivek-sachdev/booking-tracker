@@ -52,7 +52,6 @@ import {
           <TableCaption>A list of your predefined flight sectors.</TableCaption>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[100px]">ID (UUID)</TableHead>
               <TableHead>Origin</TableHead>
               <TableHead>Destination</TableHead>
               <TableHead>Description</TableHead>
@@ -64,9 +63,6 @@ import {
             {sectors && sectors.length > 0 ? (
               sectors.map((sector) => (
                 <TableRow key={sector.id}>
-                  <TableCell className="font-medium truncate" title={sector.id}>
-                     {sector.id.substring(0, 8)}...
-                  </TableCell>
                   <TableCell>{sector.origin_code}</TableCell>
                   <TableCell>{sector.destination_code}</TableCell>
                   <TableCell>{sector.description || '-'}</TableCell>
@@ -78,7 +74,7 @@ import {
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={6} className="text-center">
+                <TableCell colSpan={5} className="text-center">
                   No predefined sectors found.
                 </TableCell>
               </TableRow>

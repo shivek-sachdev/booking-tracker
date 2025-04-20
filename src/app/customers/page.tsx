@@ -51,7 +51,6 @@ import {
           <TableCaption>A list of your registered customers.</TableCaption>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[100px]">ID (UUID)</TableHead>
               <TableHead>Company Name</TableHead>
               <TableHead>Created At</TableHead>
               <TableHead className="text-right">Actions</TableHead>
@@ -61,9 +60,6 @@ import {
             {customers && customers.length > 0 ? (
               customers.map((customer) => (
                 <TableRow key={customer.id}>
-                  <TableCell className="font-medium truncate" title={customer.id}>
-                     {customer.id.substring(0, 8)}...
-                  </TableCell>
                   <TableCell>{customer.company_name}</TableCell>
                   <TableCell>{formatDate(customer.created_at)}</TableCell>
                   <TableCell className="text-right">
@@ -73,7 +69,7 @@ import {
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={4} className="text-center">
+                <TableCell colSpan={3} className="text-center">
                   No customers found.
                 </TableCell>
               </TableRow>

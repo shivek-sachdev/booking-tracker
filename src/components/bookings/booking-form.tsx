@@ -24,7 +24,7 @@ import {
   DialogTitle 
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils"; // For merging classNames
-import { bookingFormSchema, BookingFormData } from '@/lib/schemas';
+import { bookingFormSchema, BookingFormData, bookingStatuses } from '@/lib/schemas';
 import { addBooking, updateBooking, type BookingActionState } from '@/app/bookings/actions'; // Use addBooking directly
 import type { Customer, PredefinedSector, BookingStatus } from '@/types/database';
 
@@ -32,10 +32,9 @@ import type { Customer, PredefinedSector, BookingStatus } from '@/types/database
 interface BookingFormProps {
   customers: Customer[];
   predefinedSectors: PredefinedSector[]; 
-  // Update mode to include 'edit'
   mode: 'add' | 'edit-simple' | 'edit'; 
   bookingId?: string; // Required for edit modes
-  initialData?: Partial<BookingFormData>; // Data to pre-fill form in edit modes
+  initialData?: Partial<BookingFormData & { status?: BookingStatus }>; // Make initialData include status for edit mode
 }
 
 // Remove the unused SubmitButton component
@@ -62,21 +61,21 @@ export function BookingForm({
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
   const [newBookingId, setNewBookingId] = useState<string | null>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  // State specifically for the booking status dropdown in edit mode
+  const [currentStatus, setCurrentStatus] = useState<BookingStatus | undefined>(initialData?.status);
 
   const form = useForm<BookingFormData>({
     resolver: zodResolver(bookingFormSchema), 
-    // Update defaultValues logic for 'edit' mode (similar to 'edit-simple' but uses full data)
+    // Default values based *only* on bookingFormSchema (no status here)
     defaultValues: (mode === 'edit' || mode === 'edit-simple') 
-      ? {
+      ? { 
           customer_id: initialData?.customer_id || '',
           booking_reference: initialData?.booking_reference || '',
           deadline: initialData?.deadline ? new Date(initialData.deadline) : null,
-          // For 'edit' mode, use initial booking_type and sectors
-          // For 'edit-simple', these might be undefined/empty but are handled
           booking_type: initialData?.booking_type, 
           sectors: initialData?.sectors || [], 
         }
-      : { // Default values for 'add' mode 
+      : { 
           customer_id: '',
           booking_type: undefined,
           booking_reference: '',
@@ -110,11 +109,16 @@ export function BookingForm({
     const data = form.getValues();
     const formData = new FormData();
     
-    // Append common fields
+    // Append common fields validated by bookingFormSchema
     formData.append('customer_id', data.customer_id);
     formData.append('booking_reference', data.booking_reference || '');
     if (data.deadline) {
       formData.append('deadline', format(data.deadline, 'yyyy-MM-dd'));
+    }
+
+    // Manually append status ONLY for update actions
+    if ((mode === 'edit' || mode === 'edit-simple') && currentStatus) {
+      formData.append('status', currentStatus);
     }
 
     // Append fields specific to 'add' or 'edit' mode
@@ -233,7 +237,7 @@ export function BookingForm({
     <>
       <Form {...form}>
         <form onSubmit={handleFormSubmit} className="space-y-6">
-          {/* Status message display only for errors */} 
+          {/* Status message display only for errors */}
           {statusMessage && !showSuccessDialog && !statusMessage.includes('successfully') && (
             <div className="p-4 rounded-md text-sm bg-red-100 text-red-800">
               {statusMessage}
@@ -414,6 +418,33 @@ export function BookingForm({
                             </FormItem>
                         )}
                         />
+                    {/* Status Dropdown (Manual) - Show only in edit modes */}
+                    {(mode === 'edit' || mode === 'edit-simple') && (
+                        <FormItem>
+                            <FormLabel>Booking Status</FormLabel>
+                            <Select 
+                                onValueChange={(value) => setCurrentStatus(value as BookingStatus)} 
+                                defaultValue={currentStatus}
+                            >
+                                <FormControl>
+                                    <SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                    {/* Dynamically create options: Current + Ticketed + Cancelled */}
+                                    {[currentStatus, 'Ticketed', 'Cancelled']
+                                      // Filter out undefined/null initial status and duplicates
+                                      .filter((value, index, self): value is BookingStatus => 
+                                          !!value && self.indexOf(value) === index
+                                      )
+                                      .map(status => (
+                                        <SelectItem key={status} value={status}>
+                                            {status}
+                                        </SelectItem>
+                                      ))}
+                                </SelectContent>
+                            </Select>
+                        </FormItem>
+                    )}
                     {/* Deadline */}
                     <FormField
                         control={form.control}

@@ -1,6 +1,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import { LayoutDashboard, ClipboardList, Users, Plane } from 'lucide-react';
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -14,16 +15,16 @@ export function MainLayout({ children }: MainLayoutProps) {
         <h2 className="text-xl font-semibold mb-6">Booking Tracker</h2>
         <nav className="flex flex-col space-y-2">
           <Button variant="ghost" className="w-full justify-start" asChild>
-            <Link href="/">Dashboard</Link>
+            <Link href="/" className="flex items-center"><LayoutDashboard className="mr-2 h-4 w-4" /> Dashboard</Link>
           </Button>
           <Button variant="ghost" className="w-full justify-start" asChild>
-            <Link href="/bookings">Bookings</Link>
+            <Link href="/bookings" className="flex items-center"><ClipboardList className="mr-2 h-4 w-4" /> Bookings</Link>
           </Button>
           <Button variant="ghost" className="w-full justify-start" asChild>
-            <Link href="/customers">Customers</Link>
+            <Link href="/customers" className="flex items-center"><Users className="mr-2 h-4 w-4" /> Customers</Link>
           </Button>
           <Button variant="ghost" className="w-full justify-start" asChild>
-            <Link href="/sectors">Sectors</Link>
+            <Link href="/sectors" className="flex items-center"><Plane className="mr-2 h-4 w-4" /> Sectors</Link>
           </Button>
           {/* Add more links as needed */}
         </nav>

@@ -3,7 +3,7 @@
 import { z } from 'zod';
 import { createSimpleServerClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
-import { bookingFormSchema, BookingFormData } from '@/lib/schemas';
+import { bookingFormSchema, BookingFormData, bookingStatuses } from '@/lib/schemas';
 import type { BookingStatus } from '@/types/database';
 import { format } from 'date-fns';
 
@@ -128,12 +128,8 @@ export async function addBooking(prevState: BookingActionState | undefined, form
   };
 }
 
-// Separate, specific schema for updateBooking
-const updateBookingSchema = z.object({
-  booking_reference: z.string().min(1, "Booking reference is required"),
-  customer_id: z.string().uuid("Please select a valid customer"),
-  deadline: z.date().optional().nullable(),
-});
+// NOTE: Using updateBookingActionSchema defined in schemas.ts
+// const updateBookingSchema = z.object({ ... }); // Removed local definition
 
 // Server Action to UPDATE a booking and REPLACE its sectors
 export async function updateBooking(
@@ -145,10 +141,12 @@ export async function updateBooking(
   }
 
   try {
-    // Parse form data with our specific updateBooking schema
-    const parsedData = updateBookingSchema.parse({
+    // Parse form data using the specific schema from schemas.ts
+    const { updateBookingActionSchema } = await import('@/lib/schemas'); // Dynamically import to ensure it's loaded
+    const parsedData = updateBookingActionSchema.parse({
       booking_reference: formData.get('booking_reference'),
       customer_id: formData.get('customer_id'),
+      status: formData.get('status'),
       deadline: formData.get('deadline') ? new Date(formData.get('deadline') as string) : null,
     });
 
@@ -160,7 +158,8 @@ export async function updateBooking(
       .update({
         booking_reference: parsedData.booking_reference,
         customer_id: parsedData.customer_id,
-        deadline: parsedData.deadline ? format(parsedData.deadline, 'yyyy-MM-dd') : null,
+        status: parsedData.status,
+        deadline: formatDateForDB(parsedData.deadline as Date | null | undefined),
         updated_at: new Date().toISOString(),
       })
       .eq('id', bookingId);

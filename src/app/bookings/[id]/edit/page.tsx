@@ -77,6 +77,7 @@ export default async function EditBookingPage({ params }: EditBookingPageProps) 
     // Prepare initialData for the form, converting dates and structuring sectors
     const initialData = {
       customer_id: booking.customer_id,
+      status: booking.status,
       booking_reference: booking.booking_reference,
       booking_type: booking.booking_type,
       deadline: booking.deadline ? new Date(booking.deadline) : null, 

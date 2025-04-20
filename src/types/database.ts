@@ -13,7 +13,7 @@ export interface PredefinedSector {
 }
 
 export type BookingType = 'One-Way' | 'Return';
-export type BookingStatus = 'Confirmed' | 'Waiting List';
+export type BookingStatus = 'Confirmed' | 'Waiting List' | 'Ticketed' | 'Cancelled' | 'Pending' | 'Unconfirmed';
 
 export interface Booking {
   id: string; // uuid

@@ -23,6 +23,7 @@ import {
   FileSpreadsheet,
   ArrowUpRight
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 // Custom Progress component implementation using Tailwind
 const Progress = ({ value, className, indicatorClassName }: { value: number, className?: string, indicatorClassName?: string }) => (
@@ -356,12 +357,13 @@ export default async function DashboardPage() {
                         <TableCell>{formatDate(booking.deadline)}</TableCell>
                         <TableCell>
                           <Badge
-                            className={`
-                              ${booking.status === 'confirmed' ? 'bg-green-500' : ''} 
-                              ${booking.status === 'pending' ? 'bg-yellow-500' : ''}
-                              ${booking.status === 'cancelled' ? 'bg-red-500' : ''}
-                              ${booking.status === 'unconfirmed' ? 'bg-gray-500' : ''}
-                            `}
+                            className={cn({
+                                'bg-green-100 text-green-800': booking.status === 'Ticketed',
+                                'bg-red-100 text-red-800': booking.status === 'Cancelled',
+                                'bg-blue-100 text-blue-800': booking.status === 'Confirmed',
+                                'bg-amber-100 text-amber-800': booking.status === 'Waiting List',
+                                'bg-gray-100 text-gray-800': !booking.status || ['Pending', 'Unconfirmed'].includes(booking.status)
+                            })}
                           >
                             {booking.status}
                           </Badge>

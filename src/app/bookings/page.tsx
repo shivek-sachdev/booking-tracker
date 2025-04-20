@@ -13,6 +13,7 @@ import Link from 'next/link';
 import { Badge } from "@/components/ui/badge"; // For status display
 import { BookingDeleteDialog } from "@/components/bookings/booking-delete-dialog";
 import { AlertCircle } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 // Helper to format date
 function formatDate(dateString: string | null | undefined): string {
@@ -37,9 +38,90 @@ function formatShortDate(dateString: string | null | undefined): string {
   }
 }
 
+// Helper function to calculate and format deadline difference
+function formatDeadlineDifference(deadline: string | null | undefined): string {
+  if (!deadline) return "No deadline";
+
+  try {
+    const deadlineDate = new Date(deadline);
+    // Set deadline to the end of its day for comparison against the start of today
+    deadlineDate.setHours(23, 59, 59, 999);
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Start of today
+
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1); // Start of tomorrow
+
+    const dayAfterTomorrow = new Date(today);
+    dayAfterTomorrow.setDate(today.getDate() + 2); // Start of the day after tomorrow
+
+    // Check if deadline has passed (is before the start of today)
+    if (deadlineDate.getTime() < today.getTime()) {
+      // Calculate how many days ago it was (using floor for whole days passed)
+      const pastDiffTime = today.getTime() - deadlineDate.getTime();
+      // Add 1 because we compare end of deadline day to start of today
+      const daysOverdue = Math.floor(pastDiffTime / (1000 * 60 * 60 * 24)) + 1;
+      return `(Overdue by ${daysOverdue} day${daysOverdue > 1 ? 's' : ''})`;
+    }
+    // Check if deadline is today (falls between start of today and start of tomorrow)
+    else if (deadlineDate.getTime() < tomorrow.getTime()) {
+      return "(Due today)";
+    }
+    // Check if deadline is tomorrow (falls between start of tomorrow and start of day after)
+    else if (deadlineDate.getTime() < dayAfterTomorrow.getTime()) {
+      return "(Due tomorrow)";
+    }
+    // Otherwise, it's in the future
+    else {
+      const futureDiffTime = deadlineDate.getTime() - today.getTime();
+      // Use ceil to count the current day as one day away if not today/tomorrow
+      const diffDays = Math.ceil(futureDiffTime / (1000 * 60 * 60 * 24));
+      return `(Due in ${diffDays} days)`;
+    }
+  } catch {
+    return "(Invalid date)";
+   // Ensure a return statement is present in all paths
+   return "(Error processing date)"; 
+  }
+}
+
+// Helper function to format sector display string
+function formatSectorsDisplay(booking: FetchedBooking): string {
+  if (!booking.booking_sectors || booking.booking_sectors.length === 0) {
+    return "N/A";
+  }
+
+  // Sectors are assumed to be sorted by the query
+  const sectors = booking.booking_sectors;
+
+  const firstSector = sectors[0]?.predefined_sectors;
+  const origin1 = firstSector?.origin_code ?? '?';
+  const dest1 = firstSector?.destination_code ?? '?';
+
+  if (booking.booking_type === 'One-Way') {
+    return `${origin1}-${dest1}`;
+  }
+
+  if (booking.booking_type === 'Return' && sectors.length >= 2) {
+    const secondSector = sectors[1]?.predefined_sectors;
+    // Assuming the return destination is the same as the first origin
+    const dest2 = secondSector?.destination_code ?? '?'; 
+    // We only need the destination of the second leg for BKK-PBH-BKK format
+    return `${origin1}-${dest1}-${dest2}`; 
+  }
+
+  // Fallback for unexpected types or sector counts
+  return sectors.map(s => `${s.predefined_sectors?.origin_code ?? '?'}-${s.predefined_sectors?.destination_code ?? '?'}`).join(', ');
+}
+
 // Define the type for a booking sector
 interface BookingSector {
   travel_date: string | null;
+  predefined_sectors: {
+    origin_code: string | null;
+    destination_code: string | null;
+  } | null;
 }
 
 // Type for the data structure returned by the Supabase query
@@ -76,9 +158,10 @@ export default async function BookingsPage() {
       deadline, 
       created_at, 
       customers(company_name),
-      booking_sectors(travel_date)
+      booking_sectors(travel_date, predefined_sectors(origin_code, destination_code))
     `)
     .order('created_at', { ascending: false })
+    .order('created_at', { referencedTable: 'booking_sectors', ascending: true })
     .returns<FetchedBooking[]>(); // Specify the return type here
 
   // Helper to format travel dates
@@ -161,11 +244,11 @@ export default async function BookingsPage() {
           <TableRow>
             <TableHead>Reference</TableHead>
             <TableHead>Customer</TableHead>
+            <TableHead>Sector</TableHead>
             <TableHead>Type</TableHead>
             <TableHead>Travel Date</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>Deadline</TableHead>
-            <TableHead>Created At</TableHead>
             <TableHead className="text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
@@ -180,10 +263,19 @@ export default async function BookingsPage() {
                   {booking.booking_reference}
                 </TableCell>
                 <TableCell>{booking.customers?.company_name ?? 'Unknown'}</TableCell>
+                <TableCell>{formatSectorsDisplay(booking)}</TableCell>
                 <TableCell>{booking.booking_type}</TableCell>
                 <TableCell>{formatTravelDates(booking)}</TableCell>
                 <TableCell>
-                    <Badge variant={booking.status === 'Confirmed' ? 'default' : 'secondary'}>
+                    <Badge 
+                        className={cn({
+                            'bg-green-100 text-green-800': booking.status === 'Ticketed',
+                            'bg-red-100 text-red-800': booking.status === 'Cancelled',
+                            'bg-blue-100 text-blue-800': booking.status === 'Confirmed',
+                            'bg-amber-100 text-amber-800': booking.status === 'Waiting List',
+                            'bg-gray-100 text-gray-800': !booking.status || ['Pending', 'Unconfirmed'].includes(booking.status)
+                        })}
+                    >
                         {booking.status}
                     </Badge>
                 </TableCell>
@@ -193,11 +285,13 @@ export default async function BookingsPage() {
                       <AlertCircle className="h-4 w-4 text-red-600" />
                     )}
                     <span className={isPastDeadline(booking.deadline) ? 'text-red-600 font-medium' : ''}>
-                      {formatDate(booking.deadline)}
+                      {formatShortDate(booking.deadline)} 
+                      <span className="text-muted-foreground text-xs ml-1">
+                        {formatDeadlineDifference(booking.deadline)}
+                      </span>
                     </span>
                   </div>
                 </TableCell>
-                <TableCell>{formatDate(booking.created_at)}</TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end space-x-2">
                     {/* Link to Booking Detail Page */}
