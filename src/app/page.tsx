@@ -56,12 +56,6 @@ function formatShortDate(dateString: string | null | undefined): string {
 // Define proper types for the status counts data
 type BookingStatus = 'confirmed' | 'pending' | 'cancelled' | 'unconfirmed';
 
-interface StatusCount {
-  status: BookingStatus;
-  count: number;
-  percentage: number;
-}
-
 // Define the type for sectors data
 interface BookingSector {
   id: string;
@@ -109,13 +103,6 @@ export default async function DashboardPage() {
     acc[status] = (acc[status] || 0) + 1;
     return acc;
   }, {});
-
-  // Format status data for display
-  const statusData: StatusCount[] = Object.entries(statusCounts || {}).map(([status, count]) => ({
-    status: status as BookingStatus,
-    count,
-    percentage: totalBookings ? Math.round((count / totalBookings) * 100) : 0
-  })).sort((a, b) => b.count - a.count);
 
   // Count bookings by customer
   const customerCounts = bookingsData.reduce((acc: Record<string, { id: string, name: string, count: number }>, booking) => {
