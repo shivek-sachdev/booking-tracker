@@ -43,8 +43,15 @@ interface BookingSector {
   travel_date: string | null;
 }
 
-// Extended booking type with sectors
-interface BookingWithSectors extends Booking {
+// Type for the data structure returned by the Supabase query
+interface FetchedBooking {
+  id: string;
+  booking_reference: string | null;
+  booking_type: string | null;
+  status: string | null;
+  deadline: string | null;
+  created_at: string | null;
+  customers: { company_name: string } | null;
   booking_sectors: BookingSector[];
 }
 
@@ -72,10 +79,11 @@ export default async function BookingsPage() {
       customers(company_name),
       booking_sectors(travel_date)
     `)
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .returns<FetchedBooking[]>(); // Specify the return type here
 
   // Helper to format travel dates
-  const formatTravelDates = (booking: any): string => {
+  const formatTravelDates = (booking: FetchedBooking): string => {
     if (!booking.booking_sectors || booking.booking_sectors.length === 0) {
       return "N/A";
     }
@@ -202,7 +210,7 @@ export default async function BookingsPage() {
                     <BookingDeleteDialog 
                       booking={{ 
                         id: booking.id, 
-                        booking_reference: booking.booking_reference 
+                        booking_reference: booking.booking_reference || 'No Reference'
                       }}
                       triggerButton={
                         <Button variant="destructive" size="sm">Delete</Button>

@@ -4,10 +4,8 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-  CardFooter,
 } from "@/components/ui/card";
 import { createSimpleServerClient } from "@/lib/supabase/server";
-import type { BookingStatus as DbBookingStatus } from "@/types/database";
 import Link from 'next/link';
 import {
   Table,
@@ -21,14 +19,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { 
-  Calendar, 
-  ClipboardCheck, 
-  ClipboardList, 
   Clock, 
   FileSpreadsheet,
-  Users, 
-  Activity,
-  Plane,
   ArrowUpRight
 } from "lucide-react";
 
@@ -74,8 +66,6 @@ interface StatusCount {
 interface BookingSector {
   id: string;
   travel_date?: string | null;
-  count?: number;
-  percentage?: number;
 }
 
 // Define customer count type
@@ -84,34 +74,6 @@ interface CustomerCount {
   company_name: string;
   count: number;
   percentage: number;
-}
-
-// Define booking date stats type
-interface DailyBookingCount {
-  date: string;
-  count: number;
-  percentage: number;
-}
-
-// Define route count type
-interface RouteCount {
-  route: string;
-  count: number;
-  percentage: number;
-}
-
-// Define the type for bookings nearing deadline
-interface ApproachingDeadlineBooking {
-  id: string;
-  booking_reference: string | null;
-  deadline: string | null;
-  customer_id: string;
-  status: string;
-  booking_type: string;
-  customers: {
-    company_name: string;
-  } | null;
-  booking_sectors: BookingSector[];
 }
 
 // Define the type for bookings data
@@ -125,6 +87,7 @@ interface BookingData {
   customers?: {
     company_name: string;
   };
+  booking_sectors: BookingSector[];
 }
 
 // The page component is now async to allow data fetching
@@ -184,23 +147,6 @@ export default async function DashboardPage() {
     .sort((a, b) => b.count - a.count)
     .slice(0, 5);
 
-  // Count bookings by route
-  const routeCounts = sectors?.reduce((acc: Record<string, number>, sector) => {
-    const route = `${sector.origin}-${sector.destination}`;
-    acc[route] = (acc[route] || 0) + 1;
-    return acc;
-  }, {});
-
-  // Format route data for display
-  const routeData: RouteCount[] = Object.entries(routeCounts || {})
-    .map(([route, count]) => ({
-      route,
-      count,
-      percentage: sectors?.length ? Math.round((count / sectors.length) * 100) : 0
-    }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 5);
-
   // Get dates for last 7 days and count bookings per day
   const last7Days = Array.from({ length: 7 }, (_, i) => {
     const date = new Date();
@@ -217,7 +163,6 @@ export default async function DashboardPage() {
     return {
       date: format(new Date(day), 'MMM d'),
       count,
-      percentage: totalBookings ? Math.round((count / totalBookings) * 100) : 0
     };
   });
 
@@ -357,27 +302,6 @@ export default async function DashboardPage() {
     // Fallback for other cases
     return sortedSectors.map(s => formatShortDate(s.travel_date)).join(", ");
   };
-
-  // Fix the formatDeadline function to handle undefined values
-  function formatDeadline(deadline: string | null | undefined): string {
-    if (!deadline) return "No deadline";
-    
-    const deadlineDate = new Date(deadline);
-    const today = new Date();
-    
-    const diffTime = deadlineDate.getTime() - today.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
-    if (diffDays < 0) {
-      return `Overdue by ${Math.abs(diffDays)} days`;
-    } else if (diffDays === 0) {
-      return "Due today";
-    } else if (diffDays === 1) {
-      return "Due tomorrow";
-    } else {
-      return `Due in ${diffDays} days`;
-    }
-  }
 
   // --- Render Dashboard --- 
   return (
