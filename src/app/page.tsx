@@ -97,13 +97,6 @@ export default async function DashboardPage() {
   const bookingsData = (bookings as unknown) as BookingData[] || [];
   const totalBookings = bookingsData.length || 0;
 
-  // Count bookings by status
-  const statusCounts = bookingsData.reduce((acc: Record<string, number>, booking) => {
-    const status = booking.status || 'unconfirmed';
-    acc[status] = (acc[status] || 0) + 1;
-    return acc;
-  }, {});
-
   // Count bookings by customer
   const customerCounts = bookingsData.reduce((acc: Record<string, { id: string, name: string, count: number }>, booking) => {
     if (booking.customers && booking.customers.company_name) {
