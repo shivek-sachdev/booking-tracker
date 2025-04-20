@@ -117,11 +117,6 @@ export default async function DashboardPage() {
     percentage: totalBookings ? Math.round((count / totalBookings) * 100) : 0
   })).sort((a, b) => b.count - a.count);
 
-  // Fetch booking sectors
-  const { data: sectors } = await supabase
-    .from('booking_sectors')
-    .select('id, origin, destination');
-
   // Count bookings by customer
   const customerCounts = bookingsData.reduce((acc: Record<string, { id: string, name: string, count: number }>, booking) => {
     if (booking.customers && booking.customers.company_name) {
@@ -144,8 +139,7 @@ export default async function DashboardPage() {
       count,
       percentage: totalBookings ? Math.round((count / totalBookings) * 100) : 0
     }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 5);
+    .sort((a, b) => b.count - a.count);
 
   // Get dates for last 7 days and count bookings per day
   const last7Days = Array.from({ length: 7 }, (_, i) => {
@@ -308,8 +302,8 @@ export default async function DashboardPage() {
     <div className="container mx-auto p-4 space-y-6">
       <h1 className="text-3xl font-bold mb-6">Dashboard</h1>
       
-      {/* First Row: Total Bookings, Booking Status, Top Customers */}
-      <div className="grid gap-4 md:grid-cols-3">
+      {/* First Row: Total Bookings, Top Customers */}
+      <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Total Bookings</CardTitle>
@@ -322,44 +316,6 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
         
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Booking Status</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {statusData.map(status => (
-                <div key={status.status} className="space-y-1">
-                  <div className="flex justify-between items-center">
-                    <Badge
-                      className={`
-                        ${status.status === 'confirmed' ? 'bg-green-500' : ''} 
-                        ${status.status === 'pending' ? 'bg-yellow-500' : ''}
-                        ${status.status === 'cancelled' ? 'bg-red-500' : ''}
-                        ${status.status === 'unconfirmed' ? 'bg-gray-500' : ''}
-                      `}
-                    >
-                      {status.status}
-                    </Badge>
-                    <span className="text-sm font-medium">{status.count}</span>
-                  </div>
-                  <Progress 
-                    value={status.percentage} 
-                    className="h-1" 
-                    indicatorClassName={`
-                      ${status.status === 'confirmed' ? 'bg-green-500' : ''} 
-                      ${status.status === 'pending' ? 'bg-yellow-500' : ''}
-                      ${status.status === 'cancelled' ? 'bg-red-500' : ''}
-                      ${status.status === 'unconfirmed' ? 'bg-gray-500' : ''}
-                    `}
-                  />
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Top Customers */}
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Top Customers</CardTitle>

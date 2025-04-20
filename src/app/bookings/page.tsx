@@ -9,7 +9,6 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { createSimpleServerClient } from "@/lib/supabase/server";
-import type { Booking } from "@/types/database";
 import Link from 'next/link';
 import { Badge } from "@/components/ui/badge"; // For status display
 import { BookingDeleteDialog } from "@/components/bookings/booking-delete-dialog";

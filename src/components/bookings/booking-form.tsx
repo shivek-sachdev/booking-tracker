@@ -93,18 +93,6 @@ export function BookingForm({
         },
   });
 
-  // Function to handle navigation to appropriate page
-  const handleNavigateAfterSuccess = () => {
-    if (mode === 'add') {
-      // For new bookings, go to the booking listing page
-      router.push('/bookings');
-    } else if (bookingId) {
-      // For edits, go to the booking detail page
-      router.push(`/bookings/${bookingId}`);
-    }
-    router.refresh();
-  };
-
   // Simplified submit handler
   const handleFormSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -214,7 +202,7 @@ export function BookingForm({
          remove(1);
        }
     }
-  }, [mode, bookingType, currentSectors.length, append, remove]); // Add dependencies
+  }, [mode, bookingType, currentSectors, append, remove]); // Add currentSectors dependency
 
   // Logic for adding/removing sectors should work in 'edit' mode as well
   const canAddSector = 
