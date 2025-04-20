@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useTransition, useEffect } from 'react';
+import { useCallback, useState, useTransition, useEffect } from 'react';
 import { useForm, useFieldArray, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation'; // For potential navigation
 import { format } from "date-fns";
-import { Calendar as CalendarIcon, Trash2, PlusCircle } from "lucide-react";
+import { Calendar as CalendarIcon, Trash2, PlusCircle, CheckCircle2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +15,14 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Calendar } from "@/components/ui/calendar";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogDescription, 
+  DialogFooter, 
+  DialogHeader, 
+  DialogTitle 
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils"; // For merging classNames
 import { bookingFormSchema, BookingFormData } from '@/lib/schemas';
 import { addBooking, updateBooking, type BookingActionState } from '@/app/bookings/actions'; // Use addBooking directly
@@ -51,7 +59,9 @@ export function BookingForm({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
-  const [isSuccess, setIsSuccess] = useState(false);
+  const [showSuccessDialog, setShowSuccessDialog] = useState(false);
+  const [newBookingId, setNewBookingId] = useState<string | null>(null);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 
   const form = useForm<BookingFormData>({
     resolver: zodResolver(bookingFormSchema), 
@@ -83,92 +93,96 @@ export function BookingForm({
         },
   });
 
-  // Effect to handle redirection after successful form submission
-  useEffect(() => {
-    if (isSuccess) {
-      const redirectTimer = setTimeout(() => {
-        if (mode === 'add') {
-          // For new bookings, go to the booking listing page
-          router.push('/bookings');
-        } else if (bookingId) {
-          // For edits, go to the booking detail page
-          router.push(`/bookings/${bookingId}`);
-        }
-        router.refresh();
-      }, 1000); // Short delay to show success message
-      
-      return () => clearTimeout(redirectTimer);
+  // Function to handle navigation to appropriate page
+  const handleNavigateAfterSuccess = () => {
+    if (mode === 'add') {
+      // For new bookings, go to the booking listing page
+      router.push('/bookings');
+    } else if (bookingId) {
+      // For edits, go to the booking detail page
+      router.push(`/bookings/${bookingId}`);
     }
-  }, [isSuccess, mode, bookingId, router]);
+    router.refresh();
+  };
 
   // Simplified submit handler
   const handleFormSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setStatusMessage(null);
-    setIsSuccess(false);
     
-    form.handleSubmit(async (data) => {
-      const formData = new FormData();
-      
-      // Append common fields
-      formData.append('customer_id', data.customer_id);
-      formData.append('booking_reference', data.booking_reference || '');
-      if (data.deadline) {
-        formData.append('deadline', format(data.deadline, 'yyyy-MM-dd'));
-      }
+    // Validate the form first
+    form.handleSubmit(() => {
+      // If validation passes, show confirmation dialog instead of submitting immediately
+      setShowConfirmDialog(true);
+    })(event);
+  };
 
-      // Append fields specific to 'add' or 'edit' mode
-      if (mode === 'add' || mode === 'edit') {
-        formData.append('booking_type', data.booking_type || '');
-        const sectorsForJson = data.sectors.map(sector => ({
-          ...sector,
-          travel_date: sector.travel_date ? format(sector.travel_date, 'yyyy-MM-dd') : null
-        }));
-        formData.append('sectorsJson', JSON.stringify(sectorsForJson));
-      }
-      
-      startTransition(async () => {
-        try {
-          let result: BookingActionState;
-          // Choose the correct server action based on mode
-          if (mode === 'edit' || mode === 'edit-simple') { // Use updateBooking for both edit modes
-            if (!bookingId) {
-                throw new Error("Booking ID is missing for update.");
-            }
-            result = await updateBooking(bookingId, formData);
-          } else { // 'add' mode
-            result = await addBooking(undefined, formData);
+  // New function to handle actual form submission after confirmation
+  const handleConfirmedSubmit = async () => {
+    const data = form.getValues();
+    const formData = new FormData();
+    
+    // Append common fields
+    formData.append('customer_id', data.customer_id);
+    formData.append('booking_reference', data.booking_reference || '');
+    if (data.deadline) {
+      formData.append('deadline', format(data.deadline, 'yyyy-MM-dd'));
+    }
+
+    // Append fields specific to 'add' or 'edit' mode
+    if (mode === 'add' || mode === 'edit') {
+      formData.append('booking_type', data.booking_type || '');
+      const sectorsForJson = data.sectors.map(sector => ({
+        ...sector,
+        travel_date: sector.travel_date ? format(sector.travel_date, 'yyyy-MM-dd') : null
+      }));
+      formData.append('sectorsJson', JSON.stringify(sectorsForJson));
+    }
+    
+    startTransition(async () => {
+      try {
+        let result: BookingActionState;
+        // Choose the correct server action based on mode
+        if (mode === 'edit' || mode === 'edit-simple') { // Use updateBooking for both edit modes
+          if (!bookingId) {
+              throw new Error("Booking ID is missing for update.");
           }
-          
-          // Handle successful result
-          if (result.message?.includes('successfully')) {
-            setStatusMessage(result.message);
-            setIsSuccess(true);
-            // Navigation is now handled by the useEffect
-          } 
-          // Handle validation errors from server
-          else if (result.errors && result.errors.length > 0) {
-            setStatusMessage(result.message || 'Validation failed');
-            result.errors.forEach(issue => {
-              const path = issue.path.join('.');
-              if (path) {
-                form.setError(path as keyof BookingFormData, { type: 'server', message: issue.message });
-              }
-            });
-          } 
-          // Handle other errors
-          else if (result.message) {
-            setStatusMessage(result.message);
-          } else {
-            setStatusMessage(`Failed to ${mode === 'add' ? 'save' : 'update'} booking.`); // Simplified message
-          }
-        } catch (error: unknown) {
-          const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
-          console.error(`Error submitting form in ${mode} mode:`, errorMessage);
-          setStatusMessage(`Failed to ${mode === 'add' ? 'save' : 'update'} booking. Please try again.`); // Simplified message
+          result = await updateBooking(bookingId, formData);
+        } else { // 'add' mode
+          result = await addBooking(undefined, formData);
         }
-      });
-    })(event); 
+        
+        // Handle successful result
+        if (result.message?.includes('successfully')) {
+          // For both add and edit modes, show success dialog
+          setStatusMessage(result.message);
+          if (result.bookingId) {
+            setNewBookingId(result.bookingId);
+          }
+          setShowSuccessDialog(true);
+        } 
+        // Handle validation errors from server
+        else if (result.errors && result.errors.length > 0) {
+          setStatusMessage(result.message || 'Validation failed');
+          result.errors.forEach(issue => {
+            const path = issue.path.join('.');
+            if (path) {
+              form.setError(path as keyof BookingFormData, { type: 'server', message: issue.message });
+            }
+          });
+        } 
+        // Handle other errors
+        else if (result.message) {
+          setStatusMessage(result.message);
+        } else {
+          setStatusMessage(`Failed to ${mode === 'add' ? 'save' : 'update'} booking.`); // Simplified message
+        }
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+        console.error(`Error submitting form in ${mode} mode:`, errorMessage);
+        setStatusMessage(`Failed to ${mode === 'add' ? 'save' : 'update'} booking. Please try again.`); // Simplified message
+      }
+    });
   };
 
   // FieldArray setup is fine, rendering is conditional
@@ -181,9 +195,8 @@ export function BookingForm({
   const bookingType = useWatch({ control: form.control, name: "booking_type" });
   const currentSectors = useWatch({ control: form.control, name: "sectors" });
 
-  // Effect for adding second sector only runs in 'add' mode
+  // Use useEffect to handle the side effect of adding the second sector
   useEffect(() => {
-    // Keep this effect only for 'add' mode
     if (mode === 'add' && bookingType === 'Return' && currentSectors.length === 1) {
       append({ 
         predefined_sector_id: '', 
@@ -192,8 +205,16 @@ export function BookingForm({
         status: 'Waiting List' as BookingStatus,
         num_pax: 1,
       });
+    } 
+    // Optional: Handle removing the second sector if type changes back from Return in add mode
+    else if (mode === 'add' && bookingType !== 'Return' && currentSectors.length === 2) {
+       // Only remove if the second sector seems like the auto-added one (e.g., check if empty)
+       // This logic might need refinement based on exact requirements
+       if (!currentSectors[1]?.predefined_sector_id && !currentSectors[1]?.travel_date) { 
+         remove(1);
+       }
     }
-  }, [mode, bookingType, currentSectors?.length, append]);
+  }, [mode, bookingType, currentSectors.length, append, remove]); // Add dependencies
 
   // Logic for adding/removing sectors should work in 'edit' mode as well
   const canAddSector = 
@@ -221,16 +242,17 @@ export function BookingForm({
   };
 
   return (
-    <Form {...form}>
-      <form onSubmit={handleFormSubmit} className="space-y-6">
-        {/* Status message display (no changes needed) */} 
-        {statusMessage && (
-          <div className={`p-4 rounded-md text-sm ${isSuccess ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-            {statusMessage}
-          </div>
-        )}
+    <>
+      <Form {...form}>
+        <form onSubmit={handleFormSubmit} className="space-y-6">
+          {/* Status message display only for errors */} 
+          {statusMessage && !showSuccessDialog && !statusMessage.includes('successfully') && (
+            <div className="p-4 rounded-md text-sm bg-red-100 text-red-800">
+              {statusMessage}
+            </div>
+          )}
 
-        <div className="space-y-6">
+          <div className="space-y-6">
             {/* Section 1: Booking Details (No changes needed) */}
             <Card>
                 <CardHeader><CardTitle>1. Booking Details</CardTitle></CardHeader>
@@ -281,15 +303,25 @@ export function BookingForm({
                                         >
                                         <FormItem className="flex items-center space-x-2 space-y-0">
                                             <FormControl>
-                                            <RadioGroupItem value="One-Way" />
+                                            <RadioGroupItem value="One-Way" id="booking-type-one-way" />
                                             </FormControl>
-                                            <FormLabel className="font-normal">One-Way</FormLabel>
+                                            <label 
+                                              htmlFor="booking-type-one-way" 
+                                              className="text-sm font-normal cursor-pointer"
+                                            >
+                                              One-Way
+                                            </label>
                                         </FormItem>
                                         <FormItem className="flex items-center space-x-2 space-y-0">
                                             <FormControl>
-                                            <RadioGroupItem value="Return" />
+                                            <RadioGroupItem value="Return" id="booking-type-return" />
                                             </FormControl>
-                                            <FormLabel className="font-normal">Return</FormLabel>
+                                            <label 
+                                              htmlFor="booking-type-return" 
+                                              className="text-sm font-normal cursor-pointer"
+                                            >
+                                              Return
+                                            </label>
                                         </FormItem>
                                         </RadioGroup>
                                     </FormControl>
@@ -309,8 +341,7 @@ export function BookingForm({
                       <>
                           {fields.map((field, index) => (
                               <div key={field.id} className="p-4 border rounded space-y-4 relative">
-                                  {/* ... existing sector fields ... */}
-                                   <div className="flex justify-between items-center mb-2">
+                                  <div className="flex justify-between items-center mb-2">
                                       <h4 className="font-medium">Sector {index + 1}</h4>
                                       {/* Allow removing only if more than 1 sector exists */}
                                       {fields.length > 1 && ( <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => removeSectorRow(index)}><Trash2 className="h-4 w-4" /></Button> )}
@@ -329,7 +360,42 @@ export function BookingForm({
                                       <FormField control={form.control} name={`sectors.${index}.flight_number`} render={({ field: sf }) => ( <FormItem><FormLabel>Flight Number</FormLabel><FormControl><Input placeholder="e.g., TG123" {...sf} value={sf.value ?? ''}/></FormControl><FormMessage /></FormItem> )}/>
                                       
                                       {/* Status Radio Group */}
-                                      <FormField control={form.control} name={`sectors.${index}.status`} render={({ field: sf }) => ( <FormItem className="space-y-2"><FormLabel>Status *</FormLabel><FormControl><RadioGroup onValueChange={sf.onChange} defaultValue={sf.value} className="flex space-x-4"><FormItem className="flex items-center space-x-2 space-y-0"><FormControl><RadioGroupItem value="Confirmed" /></FormControl><FormLabel className="font-normal">Confirmed</FormLabel></FormItem><FormItem className="flex items-center space-x-2 space-y-0"><FormControl><RadioGroupItem value="Waiting List" /></FormControl><FormLabel className="font-normal">Waiting List</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem> )}/>
+                                      <FormField control={form.control} name={`sectors.${index}.status`} render={({ field: sf }) => ( 
+                                        <FormItem className="space-y-2">
+                                          <FormLabel>Status *</FormLabel>
+                                          <FormControl>
+                                            <RadioGroup 
+                                              onValueChange={sf.onChange} 
+                                              defaultValue={sf.value} 
+                                              className="flex space-x-4"
+                                            >
+                                              <FormItem className="flex items-center space-x-2 space-y-0">
+                                                <FormControl>
+                                                  <RadioGroupItem value="Confirmed" id={`status-confirmed-${index}`} />
+                                                </FormControl>
+                                                <label 
+                                                  htmlFor={`status-confirmed-${index}`} 
+                                                  className="text-sm font-normal cursor-pointer"
+                                                >
+                                                  Confirmed
+                                                </label>
+                                              </FormItem>
+                                              <FormItem className="flex items-center space-x-2 space-y-0">
+                                                <FormControl>
+                                                  <RadioGroupItem value="Waiting List" id={`status-waiting-${index}`} />
+                                                </FormControl>
+                                                <label 
+                                                  htmlFor={`status-waiting-${index}`} 
+                                                  className="text-sm font-normal cursor-pointer"
+                                                >
+                                                  Waiting List
+                                                </label>
+                                              </FormItem>
+                                            </RadioGroup>
+                                          </FormControl>
+                                          <FormMessage />
+                                        </FormItem> 
+                                      )}/>
                               </div>
                           ))}
                           {/* Add Sector Button - enable in add/edit */}
@@ -386,13 +452,68 @@ export function BookingForm({
                         />
                 </CardContent>
             </Card>
-        </div>
+          </div>
 
-        {/* Submit Button Text Update */}
-        <Button type="submit" disabled={isPending || isSuccess} size="lg">
+        {/* Submit Button */}
+        <Button type="submit" disabled={isPending} size="lg">
           {isPending ? 'Saving...' : (mode === 'add' ? 'Save Booking' : 'Update Booking')} 
         </Button>
       </form>
     </Form>
+
+    {/* Confirmation Dialog */}
+    <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Confirm Booking</DialogTitle>
+          <DialogDescription>
+            Are you sure you want to {mode === 'add' ? 'create' : 'update'} this booking?
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="flex flex-row gap-2 justify-between">
+          <Button variant="outline" onClick={() => setShowConfirmDialog(false)}>
+            Cancel
+          </Button>
+          <Button onClick={() => {
+            setShowConfirmDialog(false);
+            handleConfirmedSubmit();
+          }}>
+            Proceed
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    {/* Success Dialog */}
+    <Dialog open={showSuccessDialog} onOpenChange={setShowSuccessDialog}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <CheckCircle2 className="text-green-500 h-6 w-6" />
+            Booking {mode === 'add' ? 'Created' : 'Updated'} Successfully
+          </DialogTitle>
+          <DialogDescription>
+            Your booking has been {mode === 'add' ? 'created' : 'updated'} successfully.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:gap-0">
+          {(bookingId || newBookingId) && (
+            <Button onClick={() => {
+              router.push(`/bookings/${bookingId || newBookingId}`);
+              router.refresh();
+            }}>
+              View Booking Details
+            </Button>
+          )}
+          <Button onClick={() => {
+            router.push('/bookings');
+            router.refresh();
+          }}>
+            Return to Bookings List
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }

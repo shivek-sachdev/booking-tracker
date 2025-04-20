@@ -4,179 +4,563 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  CardFooter,
 } from "@/components/ui/card";
 import { createSimpleServerClient } from "@/lib/supabase/server";
-import type { Booking, BookingStatus } from "@/types/database";
+import type { BookingStatus as DbBookingStatus } from "@/types/database";
 import Link from 'next/link';
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { format } from "date-fns";
+import { 
+  Calendar, 
+  ClipboardCheck, 
+  ClipboardList, 
+  Clock, 
+  FileSpreadsheet,
+  Users, 
+  Activity,
+  Plane,
+  ArrowUpRight
+} from "lucide-react";
+
+// Custom Progress component implementation using Tailwind
+const Progress = ({ value, className, indicatorClassName }: { value: number, className?: string, indicatorClassName?: string }) => (
+  <div className={`w-full h-2 bg-gray-200 rounded-full ${className || ''}`}>
+    <div 
+      className={`h-full rounded-full ${indicatorClassName || 'bg-blue-600'}`} 
+      style={{ width: `${Math.max(0, Math.min(100, value))}%` }}
+    ></div>
+  </div>
+);
 
 // Helper function to format dates (optional, adjust as needed)
-function formatDate(dateString: string | null | undefined): string {
+function formatDate(date: string | null): string {
+  if (!date) return 'N/A';
+  return format(new Date(date), 'MMM d, yyyy');
+}
+
+// Helper function to format short date (e.g., 13APR)
+function formatShortDate(dateString: string | null | undefined): string {
   if (!dateString) return "N/A";
   try {
-    return new Date(dateString).toLocaleDateString('en-CA'); // YYYY-MM-DD format
+    const date = new Date(dateString);
+    const day = date.getDate();
+    const month = date.toLocaleString('en-US', { month: 'short' }).toUpperCase();
+    return `${day}${month}`;
   } catch {
-    return "Invalid Date";
+    return "N/A";
   }
 }
 
 // Define proper types for the status counts data
+type BookingStatus = 'confirmed' | 'pending' | 'cancelled' | 'unconfirmed';
+
 interface StatusCount {
-  status: string;
+  status: BookingStatus;
   count: number;
+  percentage: number;
+}
+
+// Define the type for sectors data
+interface BookingSector {
+  id: string;
+  travel_date?: string | null;
+  count?: number;
+  percentage?: number;
+}
+
+// Define customer count type
+interface CustomerCount {
+  customer_id: string;
+  company_name: string;
+  count: number;
+  percentage: number;
+}
+
+// Define booking date stats type
+interface DailyBookingCount {
+  date: string;
+  count: number;
+  percentage: number;
+}
+
+// Define route count type
+interface RouteCount {
+  route: string;
+  count: number;
+  percentage: number;
 }
 
 // Define the type for bookings nearing deadline
 interface ApproachingDeadlineBooking {
-    id: string;
-    booking_reference: string | null;
-    deadline: string | null;
-    customers: { company_name: string }[] | null;
+  id: string;
+  booking_reference: string | null;
+  deadline: string | null;
+  customer_id: string;
+  status: string;
+  booking_type: string;
+  customers: {
+    company_name: string;
+  } | null;
+  booking_sectors: BookingSector[];
+}
+
+// Define the type for bookings data
+interface BookingData {
+  id: string;
+  booking_reference?: string;
+  status?: BookingStatus;
+  deadline?: string;
+  customer_id?: string;
+  created_at?: string;
+  customers?: {
+    company_name: string;
+  };
 }
 
 // The page component is now async to allow data fetching
 export default async function DashboardPage() {
   const supabase = createSimpleServerClient();
 
-  // --- Fetch Data --- (Error handling omitted for brevity)
+  // Fetch total bookings and count by status
+  const { data: bookings } = await supabase
+    .from('bookings')
+    .select('id, booking_reference, status, deadline, customer_id, created_at, customers(company_name)');
 
-  // 1. Bookings nearing deadline (e.g., within next 7 days, not confirmed)
-  const sevenDaysFromNow = new Date();
-  sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
+  // Cast the data to the proper type using an unknown intermediate
+  const bookingsData = (bookings as unknown) as BookingData[] || [];
+  const totalBookings = bookingsData.length || 0;
+
+  // Count bookings by status
+  const statusCounts = bookingsData.reduce((acc: Record<string, number>, booking) => {
+    const status = booking.status || 'unconfirmed';
+    acc[status] = (acc[status] || 0) + 1;
+    return acc;
+  }, {});
+
+  // Format status data for display
+  const statusData: StatusCount[] = Object.entries(statusCounts || {}).map(([status, count]) => ({
+    status: status as BookingStatus,
+    count,
+    percentage: totalBookings ? Math.round((count / totalBookings) * 100) : 0
+  })).sort((a, b) => b.count - a.count);
+
+  // Fetch booking sectors
+  const { data: sectors } = await supabase
+    .from('booking_sectors')
+    .select('id, origin, destination');
+
+  // Count bookings by customer
+  const customerCounts = bookingsData.reduce((acc: Record<string, { id: string, name: string, count: number }>, booking) => {
+    if (booking.customers && booking.customers.company_name) {
+      const customerId = booking.customer_id || '';
+      const customerName = booking.customers.company_name;
+      
+      if (!acc[customerId]) {
+        acc[customerId] = { id: customerId, name: customerName, count: 0 };
+      }
+      acc[customerId].count++;
+    }
+    return acc;
+  }, {});
+
+  // Format customer data for display
+  const customerData: CustomerCount[] = Object.values(customerCounts || {})
+    .map(({ id, name, count }) => ({
+      customer_id: id,
+      company_name: name,
+      count,
+      percentage: totalBookings ? Math.round((count / totalBookings) * 100) : 0
+    }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5);
+
+  // Count bookings by route
+  const routeCounts = sectors?.reduce((acc: Record<string, number>, sector) => {
+    const route = `${sector.origin}-${sector.destination}`;
+    acc[route] = (acc[route] || 0) + 1;
+    return acc;
+  }, {});
+
+  // Format route data for display
+  const routeData: RouteCount[] = Object.entries(routeCounts || {})
+    .map(([route, count]) => ({
+      route,
+      count,
+      percentage: sectors?.length ? Math.round((count / sectors.length) * 100) : 0
+    }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5);
+
+  // Get dates for last 7 days and count bookings per day
+  const last7Days = Array.from({ length: 7 }, (_, i) => {
+    const date = new Date();
+    date.setDate(date.getDate() - i);
+    return format(date, 'yyyy-MM-dd');
+  }).reverse();
+
+  const dailyBookings = last7Days.map(day => {
+    const count = bookingsData.filter(b => {
+      const bookingDate = b.created_at ? new Date(b.created_at).toISOString().split('T')[0] : null;
+      return bookingDate === day;
+    }).length || 0;
+    
+    return {
+      date: format(new Date(day), 'MMM d'),
+      count,
+      percentage: totalBookings ? Math.round((count / totalBookings) * 100) : 0
+    };
+  });
+
+  // Calculate percentages for progress indicators
+  const maxDailyBooking = Math.max(...dailyBookings.map(d => d.count), 1);
+
+  // 1. Bookings with deadlines today, tomorrow, or past deadlines
+  // Format dates for database queries
+  const today = new Date();
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  
+  const todayFormatted = today.toISOString().split('T')[0];
+  const tomorrowFormatted = tomorrow.toISOString().split('T')[0];
+  
+  console.log(`Fetching deadlines including today (${todayFormatted}), tomorrow (${tomorrowFormatted}), and past deadlines`);
+  
+  // Define the proper return type for the query
+  type DeadlineQueryResult = {
+    id: string;
+    booking_reference: string | null;
+    deadline: string | null;
+    customer_id: string;
+    status: string;
+    booking_type: string;
+    customers: {
+      company_name: string;
+    } | null;
+    booking_sectors: {
+      id: string;
+      travel_date: string | null;
+    }[];
+  };
+  
   const { data: approachingDeadlines, error: deadlineError } = await supabase
     .from("bookings")
-    .select("id, booking_reference, deadline, customers ( company_name )") // Fetch customer name too
-    .lt("deadline", sevenDaysFromNow.toISOString().split('T')[0]) // Less than 7 days from now
-    .gte("deadline", new Date().toISOString().split('T')[0]) // Greater than or equal to today
-    .neq("status", 'Confirmed' as BookingStatus) // Not confirmed
+    .select(`
+      id, 
+      booking_reference, 
+      deadline, 
+      customer_id, 
+      status, 
+      booking_type,
+      customers(company_name),
+      booking_sectors(id, travel_date)
+    `)
+    .not('deadline', 'is', null)
+    .lte('deadline', tomorrowFormatted)
     .order("deadline", { ascending: true })
-    .limit(5);
-  if (deadlineError) console.error("Deadline fetch error:", deadlineError.message);
-
-  // 2. Total Bookings counts by status - USE RPC
-  const { data: statusCounts, error: statusError } = await supabase
-    .from('bookings')
-    .select('status') // Select only status to iterate later, or use an RPC for counts
-    .returns<StatusCount[]>();
-
-  if (statusError) console.error("Count fetch error:", statusError ? statusError.message : 'Unknown error');
-
-  // Initialize counts
-  let bookingCounts = {
-    total: 0,
-    confirmed: 0,
-    waitingList: 0,
-  };
-
-  // Process counts ONLY if data is an array and not an error object
-  if (!statusError && Array.isArray(statusCounts)) {
-    // Manual counting since .group() was removed
-    let confirmed = 0;
-    let waitingList = 0;
-    statusCounts.forEach(item => {
-      if (item.status === 'Confirmed') confirmed++;
-      if (item.status === 'Waiting List') waitingList++;
-    });
-    bookingCounts = {
-      total: statusCounts.length,
-      confirmed: confirmed,
-      waitingList: waitingList,
-    };
-  } else if (statusCounts && !Array.isArray(statusCounts)) {
-    // Log if the RPC returned something unexpected in the data field
-    console.error("Unexpected data format from get_booking_counts_by_status RPC:", statusCounts);
+    .returns<DeadlineQueryResult[]>();
+    
+  if (deadlineError) {
+    console.error("Deadline fetch error:", deadlineError.message);
+    console.error("Full error:", deadlineError);
+  } else {
+    console.log(`Found ${approachingDeadlines?.length || 0} deadlines (today, tomorrow, and past)`);
+    console.log("First deadline item:", approachingDeadlines?.[0]);
   }
 
-  // 3. Recent Activity (latest 5 bookings)
-  const { data: recentBookings, error: recentError } = await supabase
-    .from("bookings")
-    .select("id, booking_reference, status, created_at, customers ( company_name )")
-    .order("created_at", { ascending: false })
-    .limit(5)
-    .returns<Array<Booking & { customers: { company_name: string } | null }>>(); // Type assertion
+  // Helper function to check if a deadline is today
+  const isToday = (dateString: string | null | undefined): boolean => {
+    if (!dateString) return false;
+    return dateString.includes(todayFormatted);
+  };
 
-  if (recentError) console.error("Recent fetch error:", recentError.message);
+  // Helper function to check if a deadline is tomorrow
+  const isTomorrow = (dateString: string | null | undefined): boolean => {
+    if (!dateString) return false;
+    return dateString.includes(tomorrowFormatted);
+  };
+
+  // Helper function to check if a deadline is in the past
+  const isPastDeadline = (dateString: string | null | undefined): boolean => {
+    if (!dateString) return false;
+    const deadlineDate = new Date(dateString);
+    deadlineDate.setHours(23, 59, 59); // End of the deadline day
+    return deadlineDate < today;
+  };
+
+  // Helper to get deadline status text and style
+  const getDeadlineStatus = (deadline: string | null | undefined) => {
+    if (!deadline) return { text: 'No Deadline', style: 'bg-gray-100 text-gray-800' };
+    
+    if (isPastDeadline(deadline)) {
+      const days = Math.ceil(Math.abs(new Date().getTime() - new Date(deadline).getTime()) / (1000 * 3600 * 24));
+      return { 
+        text: `Overdue by ${days} day${days > 1 ? 's' : ''}!`, 
+        style: 'bg-red-100 text-red-800 font-bold'
+      };
+    }
+    
+    if (isToday(deadline)) {
+      return { text: 'Due Today!', style: 'bg-red-100 text-red-800 font-bold' };
+    }
+    
+    if (isTomorrow(deadline)) {
+      return { text: 'Due Tomorrow', style: 'bg-amber-100 text-amber-800' };
+    }
+    
+    return { text: formatDate(deadline), style: 'bg-gray-100 text-gray-800' };
+  };
+
+  // Helper to format travel dates
+  const formatTravelDates = (booking: DeadlineQueryResult): string => {
+    if (!booking.booking_sectors || booking.booking_sectors.length === 0) {
+      return "N/A";
+    }
+
+    // Sort sectors by travel date
+    const sortedSectors = [...booking.booking_sectors]
+      .filter(sector => sector.travel_date)
+      .sort((a, b) => {
+        if (!a.travel_date) return 1;
+        if (!b.travel_date) return -1;
+        return new Date(a.travel_date).getTime() - new Date(b.travel_date).getTime();
+      });
+
+    if (sortedSectors.length === 0) {
+      return "N/A";
+    }
+    
+    // For one-way bookings (or only one date)
+    if (booking.booking_type === 'One-Way' || sortedSectors.length === 1) {
+      return formatShortDate(sortedSectors[0].travel_date);
+    }
+    
+    // For return bookings
+    if (booking.booking_type === 'Return' && sortedSectors.length >= 2) {
+      const departDate = formatShortDate(sortedSectors[0].travel_date);
+      const returnDate = formatShortDate(sortedSectors[1].travel_date);
+      
+      if (departDate !== "N/A" && returnDate !== "N/A") {
+        return `${departDate}-${returnDate}`;
+      }
+    }
+    
+    // Fallback for other cases
+    return sortedSectors.map(s => formatShortDate(s.travel_date)).join(", ");
+  };
+
+  // Fix the formatDeadline function to handle undefined values
+  function formatDeadline(deadline: string | null | undefined): string {
+    if (!deadline) return "No deadline";
+    
+    const deadlineDate = new Date(deadline);
+    const today = new Date();
+    
+    const diffTime = deadlineDate.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays < 0) {
+      return `Overdue by ${Math.abs(diffDays)} days`;
+    } else if (diffDays === 0) {
+      return "Due today";
+    } else if (diffDays === 1) {
+      return "Due tomorrow";
+    } else {
+      return `Due in ${diffDays} days`;
+    }
+  }
 
   // --- Render Dashboard --- 
   return (
-    <div>
-      <h1 className="text-2xl font-semibold mb-6">Dashboard</h1>
-
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {/* Card 1: Bookings Nearing Deadline */}
+    <div className="container mx-auto p-4 space-y-6">
+      <h1 className="text-3xl font-bold mb-6">Dashboard</h1>
+      
+      {/* First Row: Total Bookings, Booking Status, Top Customers */}
+      <div className="grid gap-4 md:grid-cols-3">
         <Card>
-          <CardHeader>
-            <CardTitle>Approaching Deadlines</CardTitle>
-            <CardDescription>Bookings needing attention soon</CardDescription>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total Bookings</CardTitle>
           </CardHeader>
           <CardContent>
-            {approachingDeadlines && approachingDeadlines.length > 0 ? (
-              <ul className="space-y-2">
-                {approachingDeadlines.map((booking: ApproachingDeadlineBooking) => (
-                  <li key={booking.id} className="text-sm">
-                    <Link href={`/bookings/${booking.id}`} className="hover:underline font-medium">
-                      {booking.booking_reference || 'No Ref'}
-                    </Link>
-                    <span className="text-muted-foreground ml-2"> ({booking.customers?.[0]?.company_name || 'Unknown Co.'})</span>
-                    <span className="block text-xs text-muted-foreground">Deadline: {formatDate(booking.deadline)}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                (No bookings nearing deadline currently)
-              </p>
-            )}
-             {deadlineError && <p className="text-sm text-red-500 mt-2">Error loading deadlines.</p>}
+            <div className="flex items-center">
+              <FileSpreadsheet className="mr-2 h-4 w-4 text-muted-foreground" />
+              <div className="text-2xl font-bold">{totalBookings}</div>
+            </div>
           </CardContent>
         </Card>
-
-        {/* Card 2: Total Bookings */}
+        
         <Card>
-          <CardHeader>
-            <CardTitle>Total Bookings</CardTitle>
-            <CardDescription>Overall booking statistics</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-1 text-sm">
-             {statusError ? (
-                 <p className="text-sm text-red-500">Error loading counts.</p>
-             ) : (
-                 <>
-                    <p>Total: <span className="font-medium">{bookingCounts.total}</span></p>
-                    <p>Confirmed: <span className="font-medium">{bookingCounts.confirmed}</span></p>
-                    <p>Waiting List: <span className="font-medium">{bookingCounts.waitingList}</span></p>
-                 </>
-             )}
-          </CardContent>
-        </Card>
-
-        {/* Card 3: Recent Activity */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent Activity</CardTitle>
-            <CardDescription>Latest booking updates</CardDescription>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Booking Status</CardTitle>
           </CardHeader>
           <CardContent>
-           {recentBookings && recentBookings.length > 0 ? (
-               <ul className="space-y-2">
-                {recentBookings.map((booking) => (
-                  <li key={booking.id} className="text-sm">
-                     <Link href={`/bookings/${booking.id}`} className="hover:underline font-medium">
-                       {booking.booking_reference || 'No Ref'}
-                     </Link>
-                     <span className="text-muted-foreground ml-2">({booking.customers?.company_name || 'Unknown Co.'}) - {booking.status}</span>
-                     <span className="block text-xs text-muted-foreground">Created: {formatDate(booking.created_at)}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                (No recent activity)
-              </p>
-            )}
-             {recentError && <p className="text-sm text-red-500 mt-2">Error loading recent activity.</p>}
+            <div className="space-y-2">
+              {statusData.map(status => (
+                <div key={status.status} className="space-y-1">
+                  <div className="flex justify-between items-center">
+                    <Badge
+                      className={`
+                        ${status.status === 'confirmed' ? 'bg-green-500' : ''} 
+                        ${status.status === 'pending' ? 'bg-yellow-500' : ''}
+                        ${status.status === 'cancelled' ? 'bg-red-500' : ''}
+                        ${status.status === 'unconfirmed' ? 'bg-gray-500' : ''}
+                      `}
+                    >
+                      {status.status}
+                    </Badge>
+                    <span className="text-sm font-medium">{status.count}</span>
+                  </div>
+                  <Progress 
+                    value={status.percentage} 
+                    className="h-1" 
+                    indicatorClassName={`
+                      ${status.status === 'confirmed' ? 'bg-green-500' : ''} 
+                      ${status.status === 'pending' ? 'bg-yellow-500' : ''}
+                      ${status.status === 'cancelled' ? 'bg-red-500' : ''}
+                      ${status.status === 'unconfirmed' ? 'bg-gray-500' : ''}
+                    `}
+                  />
+                </div>
+              ))}
+            </div>
           </CardContent>
         </Card>
 
+        {/* Top Customers */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Top Customers</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {customerData.length ? (
+                customerData.slice(0, 5).map(customer => (
+                  <div key={customer.customer_id} className="space-y-1">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs truncate max-w-[150px]">{customer.company_name}</span>
+                      <span className="text-xs font-medium">{customer.count}</span>
+                    </div>
+                    <Progress value={customer.percentage} className="h-1" />
+                  </div>
+                ))
+              ) : (
+                <p className="text-muted-foreground">No customer data available</p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Second Row: Approaching Deadlines Table */}
+      <div>
+        <h2 className="text-xl font-semibold mb-4 flex items-center">
+          <Clock className="mr-2 h-5 w-5 text-red-500" /> 
+          Approaching & Passed Deadlines
+        </h2>
+        
+        <Card>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Reference</TableHead>
+                  <TableHead>Customer</TableHead>
+                  <TableHead>Travel Date</TableHead>
+                  <TableHead>Deadline</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Urgency</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {approachingDeadlines && approachingDeadlines.length > 0 ? (
+                  approachingDeadlines.map((booking) => {
+                    const deadlineStatus = getDeadlineStatus(booking.deadline);
+                    
+                    return (
+                      <TableRow key={booking.id} className={isPastDeadline(booking.deadline) ? 'bg-red-50' : ''}>
+                        <TableCell className="font-medium">
+                          {booking.booking_reference || 'No Ref'}
+                        </TableCell>
+                        <TableCell>{booking.customers?.company_name || 'Unknown Co.'}</TableCell>
+                        <TableCell>{formatTravelDates(booking)}</TableCell>
+                        <TableCell>{formatDate(booking.deadline)}</TableCell>
+                        <TableCell>
+                          <Badge
+                            className={`
+                              ${booking.status === 'confirmed' ? 'bg-green-500' : ''} 
+                              ${booking.status === 'pending' ? 'bg-yellow-500' : ''}
+                              ${booking.status === 'cancelled' ? 'bg-red-500' : ''}
+                              ${booking.status === 'unconfirmed' ? 'bg-gray-500' : ''}
+                            `}
+                          >
+                            {booking.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <span className={`px-2 py-1 rounded-full text-xs ${deadlineStatus.style}`}>
+                            {deadlineStatus.text}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Link href={`/bookings/${booking.id}`} className="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center">
+                            View<ArrowUpRight className="ml-1 h-3 w-3" />
+                          </Link>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                      No bookings with approaching or passed deadlines
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+              <TableCaption>
+                {deadlineError ? (
+                  <p className="text-red-500">Error loading deadlines: {deadlineError.message}</p>
+                ) : (
+                  `Showing ${approachingDeadlines?.length || 0} booking(s) with upcoming or passed deadlines`
+                )}
+              </TableCaption>
+            </Table>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Third Row: Weekly Booking Trends */}
+      <div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Weekly Booking Trends</CardTitle>
+            <CardDescription>Booking activity over the last 7 days</CardDescription>
+          </CardHeader>
+          <CardContent className="h-72">
+            <div className="flex h-full items-end gap-2 justify-between px-6">
+              {dailyBookings.map((day) => (
+                <div key={day.date} className="flex flex-col items-center flex-1">
+                  <div 
+                    className="w-full bg-blue-500 rounded-t" 
+                    style={{ height: `${(day.count / maxDailyBooking) * 200}px` }}
+                  ></div>
+                  <div className="mt-2 text-sm font-medium">{day.date}</div>
+                  <div className="text-sm text-muted-foreground">{day.count} bookings</div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
