@@ -24,7 +24,7 @@ import {
   DialogTitle 
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils"; // For merging classNames
-import { bookingFormSchema, BookingFormData, bookingStatuses } from '@/lib/schemas';
+import { bookingFormSchema, BookingFormData } from '@/lib/schemas';
 import { addBooking, updateBooking, type BookingActionState } from '@/app/bookings/actions'; // Use addBooking directly
 import type { Customer, PredefinedSector, BookingStatus } from '@/types/database';
 
@@ -430,9 +430,7 @@ export function BookingForm({
                                     <SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
-                                    {/* Dynamically create options: Current + Ticketed + Cancelled */}
                                     {[currentStatus, 'Ticketed', 'Cancelled']
-                                      // Filter out undefined/null initial status and duplicates
                                       .filter((value, index, self): value is BookingStatus => 
                                           !!value && self.indexOf(value) === index
                                       )

@@ -3,9 +3,8 @@
 import { z } from 'zod';
 import { createSimpleServerClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
-import { bookingFormSchema, BookingFormData, bookingStatuses } from '@/lib/schemas';
+import { bookingFormSchema, BookingFormData } from '@/lib/schemas';
 import type { BookingStatus } from '@/types/database';
-import { format } from 'date-fns';
 
 // Helper function to determine overall booking status from sectors
 function determineOverallStatus(sectors: BookingFormData['sectors']): BookingStatus {

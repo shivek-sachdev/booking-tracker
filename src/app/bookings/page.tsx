@@ -15,16 +15,6 @@ import { BookingDeleteDialog } from "@/components/bookings/booking-delete-dialog
 import { AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-// Helper to format date
-function formatDate(dateString: string | null | undefined): string {
-  if (!dateString) return "N/A";
-  try {
-    return new Date(dateString).toLocaleDateString('en-CA'); // YYYY-MM-DD format
-  } catch {
-    return "Invalid Date";
-  }
-}
-
 // Helper function to format short date (e.g., 13APR)
 function formatShortDate(dateString: string | null | undefined): string {
   if (!dateString) return "N/A";
