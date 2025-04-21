@@ -1,26 +1,37 @@
-import { createClient } from '@supabase/supabase-js';
+import { createServerClient, type CookieOptions } from '@supabase/ssr';
+import { type ReadonlyRequestCookies } from 'next/dist/server/web/spec-extension/adapters/request-cookies'; // Import the specific type
 
-// Define a simplified function to create a Supabase client for server-side data fetching
-// This does NOT handle auth cookies and is suitable only for reading public data
-// or data where RLS is not dependent on user auth.
-// Replace with the proper @supabase/ssr implementation when auth is needed.
-export function createSimpleServerClient() {
-  // Ensure environment variables are loaded
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error('Supabase URL or Anon Key is missing from environment variables.');
-  }
-
-  // Create and return the Supabase client
-  // We pass { auth: { persistSession: false } } to prevent attempts to use localStorage
-  // on the server.
-  return createClient(supabaseUrl, supabaseAnonKey, {
-     auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-        detectSessionInUrl: false
-     }
-  });
+// Accept the cookie store as an argument
+export function createClient(cookieStore: ReadonlyRequestCookies) {
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value;
+        },
+        set(name: string, value: string, options: CookieOptions) {
+          try {
+            // Use the passed cookieStore
+            cookieStore.set({ name, value, ...options });
+          } catch (error) {
+            // The `set` method was called from a Server Component.
+            // This can be ignored if you have middleware refreshing
+            // user sessions.
+          }
+        },
+        remove(name: string, options: CookieOptions) {
+          try {
+            // Use the passed cookieStore
+            cookieStore.set({ name, value: '', ...options });
+          } catch (error) {
+            // The `delete` method was called from a Server Component.
+            // This can be ignored if you have middleware refreshing
+            // user sessions.
+          }
+        },
+      },
+    }
+  );
 } 
