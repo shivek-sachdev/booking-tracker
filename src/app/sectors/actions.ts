@@ -2,7 +2,6 @@
 
 import { createSimpleServerClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
-import { z } from 'zod';
 import { predefinedSectorSchema } from '@/lib/schemas';
 
 export type SectorFormState = {
@@ -13,16 +12,6 @@ export type SectorFormState = {
     description?: string[];
   };
 };
-
-interface FormActionResult {
-  success: boolean;
-  message: string;
-}
-
-interface DeleteResult {
-  success: boolean;
-  message: string;
-}
 
 export async function addSector(prevState: SectorFormState | undefined, formData: FormData): Promise<SectorFormState> {
   const supabase = createSimpleServerClient();
