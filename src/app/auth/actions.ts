@@ -1,12 +1,11 @@
 'use server';
 
-import { createClient } from '@/lib/supabase/server'; // Use the server client from @supabase/ssr setup
+import { createSimpleServerClient } from '@/lib/supabase/server'; // Use the simple server client
 import { redirect } from 'next/navigation';
-import { cookies } from 'next/headers';
 
 export async function signOut() {
-  const cookieStore = cookies();
-  const supabase = createClient(cookieStore); // Create client for server actions
+  // Use the simple server client that doesn't rely on cookies
+  const supabase = createSimpleServerClient();
 
   const { error } = await supabase.auth.signOut();
 
