@@ -63,6 +63,8 @@ export function BookingForm({
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   // State specifically for the booking status dropdown in edit mode
   const [currentStatus, setCurrentStatus] = useState<BookingStatus | undefined>(initialData?.status);
+  // State to track if the automatic second sector for Return has been added
+  const [secondSectorAdded, setSecondSectorAdded] = useState(false);
 
   const form = useForm<BookingFormData>({
     resolver: zodResolver(bookingFormSchema), 
@@ -85,7 +87,7 @@ export function BookingForm({
               predefined_sector_id: '', 
               travel_date: null, 
               flight_number: '', 
-              status: 'Waiting List' as BookingStatus,
+              status: 'Confirmed' as BookingStatus,
               num_pax: 1,
             },
           ],
@@ -189,24 +191,31 @@ export function BookingForm({
 
   // Use useEffect to handle the side effect of adding the second sector
   useEffect(() => {
-    if (mode === 'add' && bookingType === 'Return' && currentSectors.length === 1) {
+    // Add second sector for Return if needed and not already added
+    if (mode === 'add' && bookingType === 'Return' && currentSectors.length === 1 && !secondSectorAdded) {
       append({ 
         predefined_sector_id: '', 
         travel_date: null, 
         flight_number: '', 
-        status: 'Waiting List' as BookingStatus,
+        status: 'Confirmed' as BookingStatus, // Default to Confirmed
         num_pax: 1,
       });
+      setSecondSectorAdded(true); // Mark as added
     } 
-    // Optional: Handle removing the second sector if type changes back from Return in add mode
-    else if (mode === 'add' && bookingType !== 'Return' && currentSectors.length === 2) {
-       // Only remove if the second sector seems like the auto-added one (e.g., check if empty)
-       // This logic might need refinement based on exact requirements
-       if (!currentSectors[1]?.predefined_sector_id && !currentSectors[1]?.travel_date) { 
-         remove(1);
-       }
+    // Remove the second sector if type changes away from Return and it was the auto-added one
+    else if (mode === 'add' && bookingType !== 'Return' && currentSectors.length === 2 && secondSectorAdded) {
+      // Only remove if the second sector seems like the auto-added one (e.g., check if empty)
+      // This logic might need refinement based on exact requirements
+      if (!currentSectors[1]?.predefined_sector_id && !currentSectors[1]?.travel_date) { 
+        remove(1);
+        setSecondSectorAdded(false); // Reset flag after removing
+      }
     }
-  }, [mode, bookingType, currentSectors, append, remove]); // Add currentSectors dependency
+    // Reset flag if type becomes undefined or not Return (handles switching away)
+    else if (bookingType !== 'Return') {
+      setSecondSectorAdded(false);
+    }
+  }, [mode, bookingType, currentSectors, append, remove, secondSectorAdded]); // Added secondSectorAdded dependency
 
   // Logic for adding/removing sectors should work in 'edit' mode as well
   const canAddSector = 
@@ -221,7 +230,7 @@ export function BookingForm({
       predefined_sector_id: '', 
       travel_date: null, 
       flight_number: '', 
-      status: 'Waiting List' as BookingStatus,
+      status: 'Confirmed' as BookingStatus,
       num_pax: 1,
     });
   };
