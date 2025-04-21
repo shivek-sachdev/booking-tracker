@@ -5,6 +5,9 @@ import { BookingForm } from "@/components/bookings/booking-form";
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 
+// Ensure this page is always dynamically rendered to fetch latest data
+export const dynamic = 'force-dynamic';
+
 export default async function NewBookingPage() {
   const supabase = createSimpleServerClient();
 
