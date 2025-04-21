@@ -2,6 +2,7 @@
 
 import { createSimpleServerClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
+import { z } from 'zod';
 import { predefinedSectorSchema } from '@/lib/schemas';
 
 export type SectorFormState = {
@@ -13,8 +14,19 @@ export type SectorFormState = {
   };
 };
 
-// Server Action to add a new predefined sector
+interface FormActionResult {
+  success: boolean;
+  message: string;
+}
+
+interface DeleteResult {
+  success: boolean;
+  message: string;
+}
+
 export async function addSector(prevState: SectorFormState | undefined, formData: FormData): Promise<SectorFormState> {
+  const supabase = createSimpleServerClient();
+
   const validatedFields = predefinedSectorSchema.safeParse({
     origin_code: formData.get('origin_code'),
     destination_code: formData.get('destination_code'),
@@ -22,13 +34,12 @@ export async function addSector(prevState: SectorFormState | undefined, formData
   });
 
   if (!validatedFields.success) {
-    return {
+    return { 
       message: 'Validation failed',
       errors: validatedFields.error.flatten().fieldErrors,
     };
   }
 
-  const supabase = createSimpleServerClient();
   const { error } = await supabase
     .from('predefined_sectors')
     .insert({
@@ -39,7 +50,6 @@ export async function addSector(prevState: SectorFormState | undefined, formData
 
   if (error) {
     console.error('Supabase error adding sector:', error);
-    // Check for unique constraint violation (if you have one on origin/destination pair)
     if (error.code === '23505') { // PostgreSQL unique violation code
       return { message: `Database Error: A sector with origin ${validatedFields.data.origin_code} and destination ${validatedFields.data.destination_code} already exists.` };
     }
@@ -50,9 +60,10 @@ export async function addSector(prevState: SectorFormState | undefined, formData
   return { message: 'Successfully added sector' };
 }
 
-// Server Action to update an existing predefined sector
 export async function updateSector(id: string, prevState: SectorFormState | undefined, formData: FormData): Promise<SectorFormState> {
   if (!id) return { message: 'Error: Missing sector ID for update.' };
+
+  const supabase = createSimpleServerClient();
 
   const validatedFields = predefinedSectorSchema.safeParse({
     origin_code: formData.get('origin_code'),
@@ -61,13 +72,12 @@ export async function updateSector(id: string, prevState: SectorFormState | unde
   });
 
   if (!validatedFields.success) {
-    return {
+    return { 
       message: 'Validation failed',
       errors: validatedFields.error.flatten().fieldErrors,
     };
   }
 
-  const supabase = createSimpleServerClient();
   const { error } = await supabase
     .from('predefined_sectors')
     .update({
@@ -89,11 +99,11 @@ export async function updateSector(id: string, prevState: SectorFormState | unde
   return { message: 'Successfully updated sector' };
 }
 
-// Server Action to delete a predefined sector
 export async function deleteSector(id: string): Promise<{ message: string | null }> {
   if (!id) return { message: 'Error: Missing sector ID for delete.' };
 
   const supabase = createSimpleServerClient();
+
   const { error } = await supabase
     .from('predefined_sectors')
     .delete()
