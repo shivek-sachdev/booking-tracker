@@ -1,3 +1,6 @@
+'use client'; // Convert to Client Component for state management
+
+import React, { useState, useEffect, useMemo } from 'react'; // Import hooks
 import {
   Table,
   TableBody,
@@ -8,12 +11,15 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { createSimpleServerClient } from "@/lib/supabase/server";
+import { createClient } from '@/lib/supabase/client'; // <-- SWITCH TO CLIENT component creator
 import Link from 'next/link';
 import { Badge } from "@/components/ui/badge"; // For status display
 import { BookingDeleteDialog } from "@/components/bookings/booking-delete-dialog";
 import { AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { BookingStatus } from '@/types/database'; // Import BookingStatus
+import { Checkbox } from "@/components/ui/checkbox"; // Import Checkbox
+import { Label } from "@/components/ui/label"; // Import Label
 
 // Helper function to format short date (e.g., 13APR)
 function formatShortDate(dateString: string | null | undefined): string {
@@ -119,15 +125,22 @@ interface FetchedBooking {
   id: string;
   booking_reference: string | null;
   booking_type: string | null;
-  status: string | null;
+  status: BookingStatus | string | null;
   deadline: string | null;
   created_at: string | null;
   customers: { company_name: string } | null;
   booking_sectors: BookingSector[];
 }
 
-export default async function BookingsPage() {
-  const supabase = createSimpleServerClient();
+export default function BookingsPage() {
+  const [bookings, setBookings] = useState<FetchedBooking[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [showTicketed, setShowTicketed] = useState(false);
+  const [showCancelled, setShowCancelled] = useState(false);
+
+  // Create the Supabase client instance once using useState
+  const [supabase] = useState(() => createClient()); // <-- Use useState and CORRECT client creator
   
   // Get current date for deadline comparison
   const today = new Date();
@@ -137,22 +150,41 @@ export default async function BookingsPage() {
   const todayFormatted = today.toISOString().split('T')[0];
   const tomorrowFormatted = tomorrow.toISOString().split('T')[0];
 
-  // Fetch bookings with customer join and sectors
-  const { data: bookings, error } = await supabase
-    .from('bookings')
-    .select(`
-      id, 
-      booking_reference, 
-      booking_type, 
-      status, 
-      deadline, 
-      created_at, 
-      customers(company_name),
-      booking_sectors(travel_date, predefined_sectors(origin_code, destination_code))
-    `)
-    .order('created_at', { ascending: false })
-    .order('created_at', { referencedTable: 'booking_sectors', ascending: true })
-    .returns<FetchedBooking[]>(); // Specify the return type here
+  // Fetch data on component mount
+  useEffect(() => {
+    const fetchBookings = async () => {
+      setIsLoading(true);
+      setFetchError(null);
+      try {
+        // Use the stable supabase client instance from state
+        const { data, error } = await supabase
+          .from('bookings')
+          .select(`
+            id, 
+            booking_reference, 
+            booking_type, 
+            status, 
+            deadline, 
+            created_at, 
+            customers(company_name),
+            booking_sectors(travel_date, predefined_sectors(origin_code, destination_code))
+          `)
+          .order('created_at', { ascending: false }) // Order main bookings
+          .order('created_at', { referencedTable: 'booking_sectors', ascending: true }) // Order sectors within booking
+          .returns<FetchedBooking[]>(); // Specify the return type here
+
+        if (error) throw error;
+        setBookings(data || []);
+      } catch (error: unknown) {
+        console.error("Error fetching bookings:", error);
+        setFetchError(error instanceof Error ? error.message : "Failed to load bookings.");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchBookings();
+  }, []); // <-- REMOVE supabase from dependency array
 
   // Helper to format travel dates
   const formatTravelDates = (booking: FetchedBooking): string => {
@@ -214,6 +246,26 @@ export default async function BookingsPage() {
     return isToday(deadline) || isTomorrow(deadline) || isPastDeadline(deadline);
   };
 
+  // Filter bookings based on state
+  const filteredBookings = useMemo(() => {
+    return bookings.filter(booking => {
+      const status = booking.status as BookingStatus; // Cast status to BookingStatus
+      // Default statuses to show
+      if (status === 'Confirmed' || status === 'Waiting List') {
+        return true;
+      }
+      // Conditionally show Ticketed
+      if (showTicketed && status === 'Ticketed') {
+        return true;
+      }
+      // Conditionally show Cancelled
+      if (showCancelled && status === 'Cancelled') {
+        return true;
+      }
+      return false;
+    });
+  }, [bookings, showTicketed, showCancelled]);
+
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
@@ -224,9 +276,29 @@ export default async function BookingsPage() {
         </Button>
       </div>
 
-      {error && (
-        <p className="text-red-500 mb-4">Error loading bookings: {error.message}</p>
+      {fetchError && (
+        <p className="text-red-500 mb-4">Error loading bookings: {fetchError}</p>
       )}
+
+      {/* Add filter checkboxes */}
+      <div className="mb-4 flex items-center space-x-4">
+        <div className="flex items-center space-x-2">
+          <Checkbox
+            id="showTicketed"
+            checked={showTicketed}
+            onCheckedChange={(checked) => setShowTicketed(Boolean(checked))}
+          />
+          <Label htmlFor="showTicketed">Show Ticketed</Label>
+        </div>
+        <div className="flex items-center space-x-2">
+          <Checkbox
+            id="showCancelled"
+            checked={showCancelled}
+            onCheckedChange={(checked) => setShowCancelled(Boolean(checked))}
+          />
+          <Label htmlFor="showCancelled">Show Cancelled</Label>
+        </div>
+      </div>
 
       <div className="overflow-x-auto">
         <Table>
@@ -244,8 +316,20 @@ export default async function BookingsPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {bookings && bookings.length > 0 ? (
-              bookings.map((booking) => (
+            {isLoading ? (
+              <TableRow>
+                <TableCell colSpan={8} className="text-center">
+                  Loading bookings...
+                </TableCell>
+              </TableRow>
+            ) : filteredBookings.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={8} className="text-center">
+                  No bookings found matching the current filters.
+                </TableCell>
+              </TableRow>
+            ) : (
+              filteredBookings.map((booking) => (
                 <TableRow 
                   key={booking.id} 
                   className={isPastDeadline(booking.deadline) ? 'bg-red-50' : ''}
@@ -304,12 +388,6 @@ export default async function BookingsPage() {
                   </TableCell>
                 </TableRow>
               ))
-            ) : (
-              <TableRow>
-                <TableCell colSpan={8} className="text-center">
-                  No bookings found.
-                </TableCell>
-              </TableRow>
             )}
           </TableBody>
         </Table>
