@@ -432,7 +432,7 @@ export default async function DashboardPage() {
       </div>
 
       {/* Weekly Booking Trends */}
-      <div className="grid grid-cols-1">
+      <div className="hidden md:grid grid-cols-1">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center">
