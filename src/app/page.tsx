@@ -353,82 +353,167 @@ export default async function DashboardPage() {
       </div>
 
       {/* Approaching Deadlines Table Wrapper */}
-      <div className="overflow-x-auto">
+      <div>
         <h2 className="text-xl font-semibold mb-4 flex items-center">
           <Clock className="mr-2 h-5 w-5 text-red-500" /> 
           Approaching & Passed Deadlines
         </h2>
-        <Card>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Reference</TableHead>
-                  <TableHead>Customer</TableHead>
-                  <TableHead>Travel Date</TableHead>
-                  <TableHead>Deadline</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Urgency</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {approachingDeadlines && approachingDeadlines.length > 0 ? (
-                  approachingDeadlines.map((booking) => {
-                    const deadlineStatus = getDeadlineStatus(booking.deadline);
-                    
-                    return (
-                      <TableRow key={booking.id} className={isPastDeadline(booking.deadline) ? 'bg-red-50' : ''}>
-                        <TableCell className="font-medium">
-                          {booking.booking_reference || 'No Ref'}
-                        </TableCell>
-                        <TableCell>{booking.customers?.company_name || 'Unknown Co.'}</TableCell>
-                        <TableCell>{formatTravelDates(booking)}</TableCell>
-                        <TableCell>{formatDate(booking.deadline)}</TableCell>
-                        <TableCell>
-                          <Badge
-                            className={cn({
-                                'bg-green-100 text-green-800': booking.status === 'Ticketed',
-                                'bg-red-100 text-red-800': booking.status === 'Cancelled',
-                                'bg-blue-100 text-blue-800': booking.status === 'Confirmed',
-                                'bg-amber-100 text-amber-800': booking.status === 'Waiting List',
-                                'bg-gray-100 text-gray-800': !booking.status || ['Pending', 'Unconfirmed'].includes(booking.status)
-                            })}
-                          >
-                            {booking.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
+        
+        {/* Desktop view (table) */}
+        <div className="hidden md:block overflow-x-auto">
+          <Card>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Reference</TableHead>
+                    <TableHead>Customer</TableHead>
+                    <TableHead>Travel Date</TableHead>
+                    <TableHead>Deadline</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Urgency</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {approachingDeadlines && approachingDeadlines.length > 0 ? (
+                    approachingDeadlines.map((booking) => {
+                      const deadlineStatus = getDeadlineStatus(booking.deadline);
+                      
+                      return (
+                        <TableRow key={booking.id} className={isPastDeadline(booking.deadline) ? 'bg-red-50' : ''}>
+                          <TableCell className="font-medium">
+                            {booking.booking_reference || 'No Ref'}
+                          </TableCell>
+                          <TableCell>{booking.customers?.company_name || 'Unknown Co.'}</TableCell>
+                          <TableCell>{formatTravelDates(booking)}</TableCell>
+                          <TableCell>{formatDate(booking.deadline)}</TableCell>
+                          <TableCell>
+                            <Badge
+                              className={cn({
+                                  'bg-green-100 text-green-800': booking.status === 'Ticketed',
+                                  'bg-red-100 text-red-800': booking.status === 'Cancelled',
+                                  'bg-blue-100 text-blue-800': booking.status === 'Confirmed',
+                                  'bg-amber-100 text-amber-800': booking.status === 'Waiting List',
+                                  'bg-gray-100 text-gray-800': !booking.status || ['Pending', 'Unconfirmed'].includes(booking.status)
+                              })}
+                            >
+                              {booking.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <span className={`px-2 py-1 rounded-full text-xs ${deadlineStatus.style}`}>
+                              {deadlineStatus.text}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Link href={`/bookings/${booking.id}`} className="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center">
+                              View<ArrowUpRight className="ml-1 h-3 w-3" />
+                            </Link>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                        No bookings with approaching or passed deadlines
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+                <TableCaption>
+                  {deadlineError ? (
+                    <p className="text-red-500">Error loading deadlines: {deadlineError.message}</p>
+                  ) : (
+                    `Showing ${approachingDeadlines?.length || 0} booking(s) with upcoming or passed deadlines`
+                  )}
+                </TableCaption>
+              </Table>
+            </CardContent>
+          </Card>
+        </div>
+        
+        {/* Mobile view (cards) */}
+        <div className="md:hidden">
+          {approachingDeadlines && approachingDeadlines.length > 0 ? (
+            <div className="space-y-4">
+              {approachingDeadlines.map((booking) => {
+                const deadlineStatus = getDeadlineStatus(booking.deadline);
+                
+                return (
+                  <Card key={booking.id} className={isPastDeadline(booking.deadline) ? 'bg-red-50' : ''}>
+                    <CardContent className="p-4">
+                      <div className="flex justify-between items-start mb-3">
+                        <div className="font-medium">{booking.booking_reference || 'No Ref'}</div>
+                        <Badge
+                          className={cn({
+                            'bg-green-100 text-green-800': booking.status === 'Ticketed',
+                            'bg-red-100 text-red-800': booking.status === 'Cancelled',
+                            'bg-blue-100 text-blue-800': booking.status === 'Confirmed',
+                            'bg-amber-100 text-amber-800': booking.status === 'Waiting List',
+                            'bg-gray-100 text-gray-800': !booking.status || ['Pending', 'Unconfirmed'].includes(booking.status)
+                          })}
+                        >
+                          {booking.status}
+                        </Badge>
+                      </div>
+                      
+                      <div className="grid gap-2 mb-3">
+                        <div className="flex justify-between">
+                          <span className="text-sm text-muted-foreground">Customer:</span>
+                          <span className="text-sm font-medium">{booking.customers?.company_name || 'Unknown Co.'}</span>
+                        </div>
+                        
+                        <div className="flex justify-between">
+                          <span className="text-sm text-muted-foreground">Travel Date:</span>
+                          <span className="text-sm font-medium">{formatTravelDates(booking)}</span>
+                        </div>
+                        
+                        <div className="flex justify-between">
+                          <span className="text-sm text-muted-foreground">Deadline:</span>
+                          <span className="text-sm font-medium">{formatDate(booking.deadline)}</span>
+                        </div>
+                        
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-muted-foreground">Urgency:</span>
                           <span className={`px-2 py-1 rounded-full text-xs ${deadlineStatus.style}`}>
                             {deadlineStatus.text}
                           </span>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Link href={`/bookings/${booking.id}`} className="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center">
-                            View<ArrowUpRight className="ml-1 h-3 w-3" />
-                          </Link>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                      No bookings with approaching or passed deadlines
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-              <TableCaption>
-                {deadlineError ? (
-                  <p className="text-red-500">Error loading deadlines: {deadlineError.message}</p>
-                ) : (
-                  `Showing ${approachingDeadlines?.length || 0} booking(s) with upcoming or passed deadlines`
-                )}
-              </TableCaption>
-            </Table>
-          </CardContent>
-        </Card>
+                        </div>
+                      </div>
+                      
+                      <div className="flex justify-end">
+                        <Link 
+                          href={`/bookings/${booking.id}`} 
+                          className="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center"
+                        >
+                          View Booking<ArrowUpRight className="ml-1 h-3 w-3" />
+                        </Link>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          ) : (
+            <Card>
+              <CardContent className="p-6 text-center text-muted-foreground">
+                No bookings with approaching or passed deadlines
+              </CardContent>
+            </Card>
+          )}
+          
+          {deadlineError && (
+            <p className="text-red-500 mt-2 text-sm">Error loading deadlines: {deadlineError.message}</p>
+          )}
+          
+          {!deadlineError && approachingDeadlines && (
+            <p className="text-sm text-muted-foreground mt-2 text-center">
+              Showing {approachingDeadlines.length} booking(s) with upcoming or passed deadlines
+            </p>
+          )}
+        </div>
       </div>
 
       {/* Weekly Booking Trends */}
