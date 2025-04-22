@@ -21,9 +21,14 @@ import { format } from "date-fns";
 import { 
   Clock, 
   FileSpreadsheet,
-  ArrowUpRight
+  ArrowUpRight,
+  Building,
+  BarChart,
+  Calendar,
+  Star
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { DashboardCard, MetricItem, ProgressBar } from "@/components/ui/dashboard-card";
 
 // Custom Progress component implementation using Tailwind
 const Progress = ({ value, className, indicatorClassName }: { value: number, className?: string, indicatorClassName?: string }) => (
@@ -121,6 +126,16 @@ export default async function DashboardPage() {
       percentage: totalBookings ? Math.round((count / totalBookings) * 100) : 0
     }))
     .sort((a, b) => b.count - a.count);
+
+  // Get the total number of customers
+  const totalCustomers = customerData.length;
+
+  // Count bookings by status
+  const statusCounts = bookingsData.reduce((acc: Record<string, number>, booking) => {
+    const status = booking.status || 'unknown';
+    acc[status] = (acc[status] || 0) + 1;
+    return acc;
+  }, {});
 
   // Get dates for last 7 days and count bookings per day
   const last7Days = Array.from({ length: 7 }, (_, i) => {
@@ -278,40 +293,93 @@ export default async function DashboardPage() {
     return sortedSectors.map(s => formatShortDate(s.travel_date)).join(", ");
   };
 
+  // Format deadline for display with relative time info
+  const formatDeadline = (deadline: string | null): string => {
+    if (!deadline) return "No deadline";
+    
+    try {
+      const deadlineDate = new Date(deadline);
+      const now = new Date();
+      
+      // Get difference in days (accounting for time of day)
+      const diffTime = deadlineDate.getTime() - now.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      if (diffDays < 0) {
+        return `Overdue by ${Math.abs(diffDays)} day${Math.abs(diffDays) !== 1 ? 's' : ''}`;
+      } else if (diffDays === 0) {
+        return "Due today";
+      } else if (diffDays === 1) {
+        return "Due tomorrow";
+      } else {
+        return `Due in ${diffDays} days`;
+      }
+    } catch (e) {
+      return "Invalid date";
+    }
+  };
+
+  // Count urgent deadlines
+  const urgentDeadlinesCount = (approachingDeadlines || []).filter(
+    booking => isPastDeadline(booking.deadline) || isToday(booking.deadline)
+  ).length;
+
   // --- Render Dashboard --- 
   return (
     <div className="container mx-auto p-4 space-y-6">
       <h1 className="text-3xl font-bold mb-6">Dashboard</h1>
       
-      {/* First Row: Total Bookings, Top Customers - Adjusted Grid */}
-      <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total Bookings</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center">
-              <FileSpreadsheet className="mr-2 h-4 w-4 text-muted-foreground" />
-              <div className="text-2xl font-bold">{totalBookings}</div>
-            </div>
-          </CardContent>
-        </Card>
+      {/* First Row: Key Metrics */}
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-4">
+        <DashboardCard
+          title="Total Bookings"
+          value={totalBookings}
+          icon={<FileSpreadsheet className="h-4 w-4 text-blue-500" />}
+        />
         
+        <DashboardCard
+          title="Total Customers"
+          value={totalCustomers}
+          icon={<Building className="h-4 w-4 text-green-500" />}
+        />
+
+        <DashboardCard
+          title="Urgent Deadlines"
+          value={urgentDeadlinesCount}
+          icon={<Clock className="h-4 w-4 text-red-500" />}
+          description="Past due and today's deadlines"
+        />
+
+        <DashboardCard
+          title="Confirmed Bookings"
+          value={statusCounts['Confirmed'] || 0}
+          icon={<Star className="h-4 w-4 text-amber-500" />}
+          description={`${Math.round(((statusCounts['Confirmed'] || 0) / totalBookings) * 100)}% of total`}
+        />
+      </div>
+      
+      {/* Second Row: Top Customers */}
+      <div className="grid gap-4 grid-cols-1">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Top Customers</CardTitle>
+            <CardTitle className="text-sm font-medium flex items-center">
+              <Building className="mr-2 h-4 w-4 text-muted-foreground" />
+              Top Customers
+            </CardTitle>
+            <CardDescription>Booking distribution by customer</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
               {customerData.length ? (
                 customerData.slice(0, 5).map(customer => (
-                  <div key={customer.customer_id} className="space-y-1">
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs truncate max-w-[150px]">{customer.company_name}</span>
-                      <span className="text-xs font-medium">{customer.count}</span>
-                    </div>
-                    <Progress value={customer.percentage} className="h-1" />
-                  </div>
+                  <MetricItem
+                    key={customer.customer_id}
+                    label={customer.company_name}
+                    value={customer.count}
+                    secondaryValue={`${customer.percentage}%`}
+                    progress={customer.percentage}
+                    progressColor={`bg-blue-${Math.min(600, 300 + customer.percentage * 3)}`}
+                  />
                 ))
               ) : (
                 <p className="text-muted-foreground">No customer data available</p>
@@ -400,11 +468,14 @@ export default async function DashboardPage() {
         </Card>
       </div>
 
-      {/* Third Row: Weekly Booking Trends - Adjusted Grid */}
-      <div className="grid grid-cols-1"> { /* Always one column, but sets up grid */}
+      {/* Weekly Booking Trends */}
+      <div className="grid grid-cols-1">
         <Card>
           <CardHeader>
-            <CardTitle>Weekly Booking Trends</CardTitle>
+            <CardTitle className="flex items-center">
+              <BarChart className="mr-2 h-5 w-5 text-blue-500" />
+              Weekly Booking Trends
+            </CardTitle>
             <CardDescription>Booking activity over the last 7 days</CardDescription>
           </CardHeader>
           <CardContent className="h-72">

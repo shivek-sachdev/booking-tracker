@@ -2,8 +2,17 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { LayoutDashboard, ClipboardList, Users, Plane, Menu, X } from 'lucide-react';
+import { 
+  LayoutDashboard, 
+  ClipboardList, 
+  Users, 
+  Plane, 
+  Menu, 
+  X,
+  ChevronRight
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface MainLayoutProps {
@@ -12,6 +21,7 @@ interface MainLayoutProps {
 
 export function MainLayout({ children }: MainLayoutProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const pathname = usePathname();
 
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen);
@@ -23,36 +33,59 @@ export function MainLayout({ children }: MainLayoutProps) {
     }
   };
 
+  // Navigation items with path and icon
+  const navItems = [
+    { path: '/', label: 'Dashboard', icon: <LayoutDashboard className="h-4 w-4" /> },
+    { path: '/bookings', label: 'Bookings', icon: <ClipboardList className="h-4 w-4" /> },
+    { path: '/customers', label: 'Customers', icon: <Users className="h-4 w-4" /> },
+    { path: '/sectors', label: 'Sectors', icon: <Plane className="h-4 w-4" /> },
+  ];
+
   return (
     <div className="flex min-h-screen">
       {/* Sidebar */}
       {/* Mobile: Fixed, slides in/out. Desktop: Static */}
       <aside className={cn(
-        "fixed inset-y-0 left-0 z-50 w-64 bg-gray-100 p-4 border-r dark:bg-gray-800 dark:border-gray-700 transition-transform duration-300 ease-in-out md:static md:translate-x-0",
+        "fixed inset-y-0 left-0 z-50 w-64 bg-gray-100 border-r dark:bg-gray-800 dark:border-gray-700 transition-transform duration-300 ease-in-out md:static md:translate-x-0 flex flex-col",
         isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
       )}>
-        <h2 className="text-xl font-semibold mb-6 flex justify-between items-center">
-          Booking Tracker
-          {/* Close button for mobile */}
-          <Button variant="ghost" size="icon" className="md:hidden" onClick={toggleMobileMenu}>
-            <X className="h-6 w-6" />
-          </Button>
-        </h2>
-        <nav className="flex flex-col space-y-2">
-          <Button variant="ghost" className="w-full justify-start" asChild>
-            <Link href="/" className="flex items-center" onClick={closeMobileMenu}><LayoutDashboard className="mr-2 h-4 w-4" /> Dashboard</Link>
-          </Button>
-          <Button variant="ghost" className="w-full justify-start" asChild>
-            <Link href="/bookings" className="flex items-center" onClick={closeMobileMenu}><ClipboardList className="mr-2 h-4 w-4" /> Bookings</Link>
-          </Button>
-          <Button variant="ghost" className="w-full justify-start" asChild>
-            <Link href="/customers" className="flex items-center" onClick={closeMobileMenu}><Users className="mr-2 h-4 w-4" /> Customers</Link>
-          </Button>
-          <Button variant="ghost" className="w-full justify-start" asChild>
-            <Link href="/sectors" className="flex items-center" onClick={closeMobileMenu}><Plane className="mr-2 h-4 w-4" /> Sectors</Link>
-          </Button>
-          {/* Add more links as needed */}
+        <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+          <h2 className="text-xl font-semibold flex justify-between items-center">
+            Booking Tracker
+            {/* Close button for mobile */}
+            <Button variant="ghost" size="icon" className="md:hidden" onClick={toggleMobileMenu}>
+              <X className="h-6 w-6" />
+            </Button>
+          </h2>
+        </div>
+
+        <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+          {navItems.map((item) => {
+            const isActive = pathname === item.path || pathname.startsWith(`${item.path}/`);
+            
+            return (
+              <Button 
+                key={item.path}
+                variant={isActive ? "secondary" : "ghost"} 
+                className={cn(
+                  "w-full justify-start mb-1",
+                  isActive && "bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300"
+                )}
+                asChild
+              >
+                <Link href={item.path} className="flex items-center" onClick={closeMobileMenu}>
+                  <span className="mr-2">{item.icon}</span> 
+                  <span>{item.label}</span>
+                  {isActive && <ChevronRight className="ml-auto h-4 w-4" />}
+                </Link>
+              </Button>
+            );
+          })}
         </nav>
+        
+        <div className="p-4 border-t border-gray-200 dark:border-gray-700 text-xs text-muted-foreground">
+          <p>Booking Tracker v1.0</p>
+        </div>
       </aside>
 
       {/* Overlay for mobile menu */}
@@ -64,15 +97,15 @@ export function MainLayout({ children }: MainLayoutProps) {
       )}
 
       {/* Main Content Area */}
-      <main className="flex-1 p-2 sm:p-4 md:p-6 bg-white dark:bg-gray-900 overflow-x-hidden">
+      <main className="flex-1 flex flex-col bg-white dark:bg-gray-900 overflow-x-hidden">
         {/* Mobile Header with Menu Button */}
-        <div className="md:hidden flex justify-between items-center mb-4">
+        <div className="md:hidden flex justify-between items-center p-4 border-b border-gray-200 dark:border-gray-800">
           <h1 className="text-xl font-semibold">Booking Tracker</h1>
           <Button variant="ghost" size="icon" onClick={toggleMobileMenu}>
             <Menu className="h-6 w-6" />
           </Button>
         </div>
-        <div className="max-w-full">
+        <div className="flex-1 p-2 sm:p-4 md:p-6 overflow-auto">
           {children}
         </div>
       </main>

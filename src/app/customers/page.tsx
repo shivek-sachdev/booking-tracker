@@ -12,6 +12,12 @@ import {
   import type { Customer } from "@/types/database";
   import { CustomerFormDialog } from "@/components/customers/customer-form-dialog";
   import { CustomerTableActions } from "@/components/customers/customer-table-actions";
+  import { 
+    ResponsiveTable, 
+    ResponsiveCard, 
+    ResponsiveCardItem,
+    ResponsiveCardContainer 
+  } from "@/components/ui/responsive-table";
 
   // Helper to format date
   function formatDate(dateString: string | null | undefined): string {
@@ -47,9 +53,9 @@ import {
           <p className="text-red-500 mb-4">Error loading customers: {error.message}</p>
         )}
 
-        <div className="overflow-x-auto">
-          <Table>
-            <TableCaption>A list of your registered customers.</TableCaption>
+        {/* Desktop view (table) */}
+        <div className="hidden md:block">
+          <ResponsiveTable caption="A list of your registered customers.">
             <TableHeader>
               <TableRow>
                 <TableHead>Company Name</TableHead>
@@ -76,7 +82,35 @@ import {
                 </TableRow>
               )}
             </TableBody>
-          </Table>
+          </ResponsiveTable>
+        </div>
+
+        {/* Mobile view (cards) */}
+        <div className="md:hidden">
+          {!customers || customers.length === 0 ? (
+            <div className="text-center py-4">No customers found.</div>
+          ) : (
+            <ResponsiveCardContainer>
+              {customers.map((customer) => (
+                <ResponsiveCard key={customer.id}>
+                  <div className="flex justify-between items-start mb-2">
+                    <div className="font-medium">{customer.company_name}</div>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-2">
+                    <ResponsiveCardItem 
+                      label="Created At" 
+                      value={formatDate(customer.created_at)} 
+                    />
+                  </div>
+
+                  <div className="flex justify-end space-x-2 mt-4">
+                    <CustomerTableActions customer={customer} />
+                  </div>
+                </ResponsiveCard>
+              ))}
+            </ResponsiveCardContainer>
+          )}
         </div>
       </div>
     );
