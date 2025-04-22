@@ -24,21 +24,10 @@ import {
   ArrowUpRight,
   Building,
   BarChart,
-  Calendar,
   Star
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { DashboardCard, MetricItem, ProgressBar } from "@/components/ui/dashboard-card";
-
-// Custom Progress component implementation using Tailwind
-const Progress = ({ value, className, indicatorClassName }: { value: number, className?: string, indicatorClassName?: string }) => (
-  <div className={`w-full h-2 bg-gray-200 rounded-full ${className || ''}`}>
-    <div 
-      className={`h-full rounded-full ${indicatorClassName || 'bg-blue-600'}`} 
-      style={{ width: `${Math.max(0, Math.min(100, value))}%` }}
-    ></div>
-  </div>
-);
+import { DashboardCard, MetricItem } from "@/components/ui/dashboard-card";
 
 // Helper function to format dates (optional, adjust as needed)
 function formatDate(date: string | null): string {
@@ -291,32 +280,6 @@ export default async function DashboardPage() {
     
     // Fallback for other cases
     return sortedSectors.map(s => formatShortDate(s.travel_date)).join(", ");
-  };
-
-  // Format deadline for display with relative time info
-  const formatDeadline = (deadline: string | null): string => {
-    if (!deadline) return "No deadline";
-    
-    try {
-      const deadlineDate = new Date(deadline);
-      const now = new Date();
-      
-      // Get difference in days (accounting for time of day)
-      const diffTime = deadlineDate.getTime() - now.getTime();
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      
-      if (diffDays < 0) {
-        return `Overdue by ${Math.abs(diffDays)} day${Math.abs(diffDays) !== 1 ? 's' : ''}`;
-      } else if (diffDays === 0) {
-        return "Due today";
-      } else if (diffDays === 1) {
-        return "Due tomorrow";
-      } else {
-        return `Due in ${diffDays} days`;
-      }
-    } catch (e) {
-      return "Invalid date";
-    }
   };
 
   // Count urgent deadlines
