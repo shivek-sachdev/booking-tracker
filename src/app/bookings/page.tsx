@@ -2,9 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react'; // Import hooks
 import {
-  Table,
   TableBody,
-  TableCaption,
   TableCell,
   TableHead,
   TableHeader,

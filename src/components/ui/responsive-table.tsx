@@ -2,16 +2,7 @@
 
 import * as React from "react";
 import { cn } from "@/lib/utils";
-import {
-  Table,
-  TableHeader,
-  TableBody,
-  TableFooter,
-  TableHead,
-  TableRow,
-  TableCell,
-  TableCaption,
-} from "@/components/ui/table";
+import { Table } from "@/components/ui/table";
 
 interface ResponsiveTableProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode;
