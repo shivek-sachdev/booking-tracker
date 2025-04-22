@@ -20,6 +20,12 @@ import { cn } from "@/lib/utils";
 import type { BookingStatus } from '@/types/database'; // Import BookingStatus
 import { Checkbox } from "@/components/ui/checkbox"; // Import Checkbox
 import { Label } from "@/components/ui/label"; // Import Label
+import { 
+  ResponsiveTable, 
+  ResponsiveCard, 
+  ResponsiveCardItem,
+  ResponsiveCardContainer 
+} from "@/components/ui/responsive-table"; // Import our responsive components
 
 // Helper function to format short date (e.g., 13APR)
 function formatShortDate(dateString: string | null | undefined): string {
@@ -184,6 +190,7 @@ export default function BookingsPage() {
     };
 
     fetchBookings();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // <-- REMOVE supabase from dependency array
 
   // Helper to format travel dates
@@ -268,10 +275,9 @@ export default function BookingsPage() {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
         <h1 className="text-2xl font-semibold">Bookings</h1>
-        {/* Link to a future Add Booking page */}
-        <Button asChild>
+        <Button asChild className="w-full sm:w-auto">
              <Link href="/bookings/new">Add New Booking</Link>
         </Button>
       </div>
@@ -281,7 +287,7 @@ export default function BookingsPage() {
       )}
 
       {/* Add filter checkboxes */}
-      <div className="mb-4 flex items-center space-x-4">
+      <div className="mb-4 flex flex-wrap items-center gap-4">
         <div className="flex items-center space-x-2">
           <Checkbox
             id="showTicketed"
@@ -300,9 +306,9 @@ export default function BookingsPage() {
         </div>
       </div>
 
-      <div className="overflow-x-auto">
-        <Table>
-          <TableCaption>A list of your tracked bookings.</TableCaption>
+      {/* Desktop view (table) */}
+      <div className="hidden md:block">
+        <ResponsiveTable caption="A list of your tracked bookings.">
           <TableHeader>
             <TableRow>
               <TableHead>Reference</TableHead>
@@ -369,12 +375,10 @@ export default function BookingsPage() {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end space-x-2">
-                      {/* Link to Booking Detail Page */}
                       <Button variant="outline" size="sm" asChild>
                         <Link href={`/bookings/${booking.id}`}>View</Link>
                       </Button>
                       
-                      {/* Delete Booking with Confirmation Dialog */}
                       <BookingDeleteDialog 
                         booking={{ 
                           id: booking.id, 
@@ -390,7 +394,87 @@ export default function BookingsPage() {
               ))
             )}
           </TableBody>
-        </Table>
+        </ResponsiveTable>
+      </div>
+
+      {/* Mobile view (cards) */}
+      <div className="md:hidden">
+        {isLoading ? (
+          <div className="text-center py-4">Loading bookings...</div>
+        ) : filteredBookings.length === 0 ? (
+          <div className="text-center py-4">No bookings found matching the current filters.</div>
+        ) : (
+          <ResponsiveCardContainer>
+            {filteredBookings.map((booking) => (
+              <ResponsiveCard
+                key={booking.id}
+                className={isPastDeadline(booking.deadline) ? 'bg-red-50' : ''}
+              >
+                <div className="flex justify-between items-start mb-2">
+                  <div className="font-medium">{booking.booking_reference || 'No Reference'}</div>
+                  <Badge 
+                    className={cn({
+                      'bg-green-100 text-green-800': booking.status === 'Ticketed',
+                      'bg-red-100 text-red-800': booking.status === 'Cancelled',
+                      'bg-blue-100 text-blue-800': booking.status === 'Confirmed',
+                      'bg-amber-100 text-amber-800': booking.status === 'Waiting List',
+                      'bg-gray-100 text-gray-800': !booking.status || ['Pending', 'Unconfirmed'].includes(booking.status)
+                    })}
+                  >
+                    {booking.status}
+                  </Badge>
+                </div>
+
+                <div className="grid grid-cols-1 gap-2">
+                  <ResponsiveCardItem 
+                    label="Customer" 
+                    value={booking.customers?.company_name ?? 'Unknown'} 
+                  />
+                  <ResponsiveCardItem 
+                    label="Sector" 
+                    value={formatSectorsDisplay(booking)} 
+                  />
+                  <ResponsiveCardItem 
+                    label="Travel Date" 
+                    value={formatTravelDates(booking)} 
+                  />
+                  <ResponsiveCardItem 
+                    label="Deadline" 
+                    value={
+                      <div className="flex items-center gap-1">
+                        {isUrgentDeadline(booking.deadline) && (
+                          <AlertCircle className="h-4 w-4 text-red-600" />
+                        )}
+                        <span className={isPastDeadline(booking.deadline) ? 'text-red-600 font-medium' : ''}>
+                          {formatShortDate(booking.deadline)} 
+                          <span className="text-muted-foreground text-xs ml-1">
+                            {formatDeadlineDifference(booking.deadline)}
+                          </span>
+                        </span>
+                      </div>
+                    } 
+                  />
+                </div>
+
+                <div className="flex justify-end space-x-2 mt-4">
+                  <Button variant="outline" size="sm" asChild>
+                    <Link href={`/bookings/${booking.id}`}>View</Link>
+                  </Button>
+                  
+                  <BookingDeleteDialog 
+                    booking={{ 
+                      id: booking.id, 
+                      booking_reference: booking.booking_reference || 'No Reference'
+                    }}
+                    triggerButton={
+                      <Button variant="destructive" size="sm">Delete</Button>
+                    }
+                  />
+                </div>
+              </ResponsiveCard>
+            ))}
+          </ResponsiveCardContainer>
+        )}
       </div>
     </div>
   );

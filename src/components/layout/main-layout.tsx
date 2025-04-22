@@ -64,7 +64,7 @@ export function MainLayout({ children }: MainLayoutProps) {
       )}
 
       {/* Main Content Area */}
-      <main className="flex-1 p-6 bg-white dark:bg-gray-900">
+      <main className="flex-1 p-2 sm:p-4 md:p-6 bg-white dark:bg-gray-900 overflow-x-hidden">
         {/* Mobile Header with Menu Button */}
         <div className="md:hidden flex justify-between items-center mb-4">
           <h1 className="text-xl font-semibold">Booking Tracker</h1>
@@ -72,7 +72,9 @@ export function MainLayout({ children }: MainLayoutProps) {
             <Menu className="h-6 w-6" />
           </Button>
         </div>
-        {children}
+        <div className="max-w-full">
+          {children}
+        </div>
       </main>
     </div>
   );

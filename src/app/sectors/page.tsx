@@ -12,6 +12,12 @@ import {
   import type { PredefinedSector } from "@/types/database";
   import { SectorFormDialog } from "@/components/sectors/sector-form-dialog";
   import { SectorTableActions } from "@/components/sectors/sector-table-actions";
+  import { 
+    ResponsiveTable, 
+    ResponsiveCard, 
+    ResponsiveCardItem,
+    ResponsiveCardContainer 
+  } from "@/components/ui/responsive-table";
 
   // Helper to format date
   function formatDate(dateString: string | null | undefined): string {
@@ -36,11 +42,11 @@ import {
 
     return (
       <div>
-        <div className="flex justify-between items-center mb-6">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
           <h1 className="text-2xl font-semibold">Predefined Sectors</h1>
           <SectorFormDialog
             mode="add"
-            triggerButton={<Button>Add New Sector</Button>}
+            triggerButton={<Button className="w-full sm:w-auto">Add New Sector</Button>}
           />
         </div>
 
@@ -48,9 +54,9 @@ import {
           <p className="text-red-500 mb-4">Error loading sectors: {error.message}</p>
         )}
 
-        <div className="overflow-x-auto">
-          <Table>
-            <TableCaption>A list of your predefined flight sectors.</TableCaption>
+        {/* Desktop Table View */}
+        <div className="hidden md:block">
+          <ResponsiveTable caption="A list of your predefined flight sectors.">
             <TableHeader>
               <TableRow>
                 <TableHead>Origin</TableHead>
@@ -81,7 +87,41 @@ import {
                 </TableRow>
               )}
             </TableBody>
-          </Table>
+          </ResponsiveTable>
+        </div>
+
+        {/* Mobile Card View */}
+        <div className="md:hidden">
+          {!sectors || sectors.length === 0 ? (
+            <div className="text-center py-4">No predefined sectors found.</div>
+          ) : (
+            <ResponsiveCardContainer>
+              {sectors.map((sector) => (
+                <ResponsiveCard key={sector.id}>
+                  <div className="flex justify-between items-start mb-3">
+                    <div className="text-lg font-medium">
+                      {sector.origin_code} - {sector.destination_code}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-2">
+                    <ResponsiveCardItem 
+                      label="Description" 
+                      value={sector.description || '-'}
+                    />
+                    <ResponsiveCardItem 
+                      label="Created At" 
+                      value={formatDate(sector.created_at)}
+                    />
+                  </div>
+
+                  <div className="flex justify-end mt-4">
+                    <SectorTableActions sector={sector} />
+                  </div>
+                </ResponsiveCard>
+              ))}
+            </ResponsiveCardContainer>
+          )}
         </div>
       </div>
     );
