@@ -6,9 +6,18 @@ import { revalidatePath } from 'next/cache';
 import { bookingFormSchema, BookingFormData } from '@/lib/schemas';
 import type { BookingStatus } from '@/types/database';
 
+// Define a proper type for the sector data we parse from JSON
+interface SectorUpdateData {
+  predefined_sector_id: string;
+  travel_date: string | null;
+  status: BookingStatus;
+  flight_number?: string | null;
+  num_pax: number;
+}
+
 // Helper function to determine overall booking status from sectors
 function determineOverallStatus(sectors: BookingFormData['sectors']): BookingStatus {
-    return sectors.some(sector => sector.status === 'Waiting List') ? 'Waiting List' : 'Confirmed';
+  return sectors.some(sector => sector.status === 'Waiting List') ? 'Waiting List' : 'Confirmed';
 }
 
 function formatDateForDB(date: Date | null | undefined): string | null {
@@ -151,6 +160,44 @@ export async function updateBooking(
 
     const supabase = createSimpleServerClient();
 
+    // Process sectors data if available
+    let totalPassengers = 0;
+    let sectorsToUpdate: {
+      booking_id: string;
+      predefined_sector_id: string;
+      travel_date: string | null;
+      status: BookingStatus;
+      flight_number: string | null;
+      num_pax: number;
+    }[] = [];
+    
+    const sectorsJson = formData.get('sectorsJson');
+    
+    if (sectorsJson) {
+      try {
+        // Parse the sectors data from the JSON string
+        const sectors = JSON.parse(sectorsJson as string) as SectorUpdateData[];
+        
+        // Calculate total passengers from all sectors
+        totalPassengers = sectors.reduce((sum: number, sector: SectorUpdateData) => sum + (sector.num_pax || 0), 0);
+        
+        // Prepare sectors for update
+        sectorsToUpdate = sectors.map((sector: SectorUpdateData) => ({
+          booking_id: bookingId,
+          predefined_sector_id: sector.predefined_sector_id,
+          travel_date: sector.travel_date, // Already formatted in the form
+          status: sector.status,
+          flight_number: sector.flight_number || null,
+          num_pax: sector.num_pax || 0,
+        }));
+      } catch (sectorError) {
+        console.error('Error processing sectors:', sectorError);
+        return { 
+          message: `Error processing sectors: ${sectorError instanceof Error ? sectorError.message : String(sectorError)}`
+        };
+      }
+    }
+
     // Update booking
     const { error: bookingError } = await supabase
       .from('bookings')
@@ -160,6 +207,7 @@ export async function updateBooking(
         status: parsedData.status,
         deadline: formatDateForDB(parsedData.deadline as Date | null | undefined),
         updated_at: new Date().toISOString(),
+        num_pax: totalPassengers, // Update total passengers count
       })
       .eq('id', bookingId);
 
@@ -170,21 +218,38 @@ export async function updateBooking(
       };
     }
 
-    // If sectors JSON is provided, handle sector updates
-    const sectorsJson = formData.get('sectorsJson');
-    if (sectorsJson) {
-      try {
-        // Process sectors (if needed)
-        // We're keeping this part commented out since it's not part of this fix
-      } catch (sectorError) {
-        return { 
-          message: `Error processing sectors: ${sectorError instanceof Error ? sectorError.message : String(sectorError)}`
+    // Update sectors if available
+    if (sectorsToUpdate.length > 0) {
+      // First, delete existing sectors
+      const { error: deleteError } = await supabase
+        .from('booking_sectors')
+        .delete()
+        .eq('booking_id', bookingId);
+        
+      if (deleteError) {
+        console.error('Error deleting existing sectors:', deleteError);
+        return {
+          message: `Error updating sectors: ${deleteError.message}`
+        };
+      }
+      
+      // Then, insert the new sectors
+      const { error: insertError } = await supabase
+        .from('booking_sectors')
+        .insert(sectorsToUpdate);
+        
+      if (insertError) {
+        console.error('Error inserting updated sectors:', insertError);
+        return {
+          message: `Error updating sectors: ${insertError.message}`
         };
       }
     }
 
     revalidatePath('/bookings');
-    return { message: 'Booking updated successfully' };
+    revalidatePath(`/bookings/${bookingId}`);
+    revalidatePath('/');
+    return { message: 'Booking updated successfully', isSuccess: true };
   } catch (error) {
     console.error('Error in updateBooking:', error);
     const errorMessage = error instanceof z.ZodError 
