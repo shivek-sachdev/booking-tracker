@@ -151,7 +151,7 @@ export default async function DashboardPage() {
   // 1. Bookings with deadlines today, tomorrow, or past deadlines
   // Format dates for database queries
   const today = new Date();
-  const tomorrow = new Date();
+  const tomorrow = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
   
   const todayFormatted = today.toISOString().split('T')[0];
@@ -189,7 +189,8 @@ export default async function DashboardPage() {
       booking_sectors(id, travel_date)
     `)
     .not('deadline', 'is', null)
-    .lte('deadline', tomorrowFormatted)
+    .not('status', 'eq', 'Cancelled') // Exclude cancelled bookings
+    .lte('deadline', tomorrowFormatted) // Get deadlines up to and including tomorrow
     .order("deadline", { ascending: true })
     .returns<DeadlineQueryResult[]>();
     
