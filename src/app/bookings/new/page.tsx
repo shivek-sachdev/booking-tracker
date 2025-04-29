@@ -1,6 +1,6 @@
 import React from 'react';
 import { createSimpleServerClient } from "@/lib/supabase/server";
-import type { Customer, PredefinedSector } from "@/types/database";
+import type { Customer, PredefinedSector, FareClass } from "@/types/database";
 import { BookingForm } from "@/components/bookings/booking-form";
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -11,8 +11,8 @@ export const dynamic = 'force-dynamic';
 export default async function NewBookingPage() {
   const supabase = createSimpleServerClient();
 
-  // Fetch necessary data for dropdowns
-  const [customersResult, sectorsResult] = await Promise.all([
+  // Fetch necessary data, including fare classes
+  const [customersResult, sectorsResult, fareClassesResult] = await Promise.all([
     supabase
       .from('customers')
       .select('id, company_name')
@@ -23,12 +23,18 @@ export default async function NewBookingPage() {
       .select('id, origin_code, destination_code, description')
       .order('origin_code', { ascending: true })
       .order('destination_code', { ascending: true })
-      .returns<PredefinedSector[]>()
+      .returns<PredefinedSector[]>(),
+    supabase
+      .from('fare_classes')
+      .select('id, name')
+      .order('name', { ascending: true })
+      .returns<FareClass[]>()
   ]);
 
   const customers = customersResult.data ?? [];
   const predefinedSectors = sectorsResult.data ?? [];
-  const error = customersResult.error || sectorsResult.error;
+  const fareClasses = fareClassesResult.data ?? [];
+  const error = customersResult.error || sectorsResult.error || fareClassesResult.error;
 
   // Check if we have any customers
   const hasCustomers = customers.length > 0;
@@ -57,6 +63,7 @@ export default async function NewBookingPage() {
               mode="add"
               customers={customers} 
               predefinedSectors={predefinedSectors} 
+              fareClasses={fareClasses}
             />
       )}
     </div>

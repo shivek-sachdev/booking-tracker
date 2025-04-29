@@ -9,6 +9,7 @@ import {
   ClipboardList, 
   Users, 
   Plane, 
+  Ticket,
   Menu, 
   X,
   ChevronRight
@@ -39,6 +40,7 @@ export function MainLayout({ children }: MainLayoutProps) {
     { path: '/bookings', label: 'Bookings', icon: <ClipboardList className="h-4 w-4" /> },
     { path: '/customers', label: 'Customers', icon: <Users className="h-4 w-4" /> },
     { path: '/sectors', label: 'Sectors', icon: <Plane className="h-4 w-4" /> },
+    { path: '/fares', label: 'Fares', icon: <Ticket className="h-4 w-4" /> },
   ];
 
   return (

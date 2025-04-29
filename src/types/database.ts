@@ -15,6 +15,14 @@ export interface PredefinedSector {
 export type BookingType = 'One-Way' | 'Return';
 export type BookingStatus = 'Confirmed' | 'Waiting List' | 'Ticketed' | 'Cancelled' | 'Pending' | 'Unconfirmed';
 
+export interface FareClass {
+  id: string; // uuid
+  name: string;
+  description?: string | null;
+  created_at: string; // timestamptz
+  updated_at: string; // timestamptz
+}
+
 export interface Booking {
   id: string; // uuid
   customer_id: string; // uuid
@@ -35,6 +43,7 @@ export interface BookingSector {
   predefined_sector_id: string; // uuid
   travel_date: string; // Added (date as string from DB)
   status: BookingStatus;
+  fare_class_id?: string | null; // uuid, Added
   flight_number?: string | null;
   num_pax: number; // Added: number of passengers for this specific sector
   created_at: string; // timestamp with time zone

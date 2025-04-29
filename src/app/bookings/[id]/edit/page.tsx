@@ -1,7 +1,7 @@
 import { createSimpleServerClient } from "@/lib/supabase/server";
 import { notFound } from 'next/navigation';
 import { BookingForm } from "@/components/bookings/booking-form";
-import type { Booking, BookingSector, PredefinedSector, Customer } from "@/types/database";
+import type { Booking, BookingSector, PredefinedSector, Customer, FareClass } from "@/types/database";
 
 // Type to represent a BookingSector with its related PredefinedSector data included
 interface PopulatedBookingSector extends BookingSector {
@@ -32,14 +32,15 @@ export default async function EditBookingPage({ params }: EditBookingPageProps) 
 
     const supabase = createSimpleServerClient();
 
-    // Fetch full booking data, customer list, and predefined sectors list
-    const [bookingResult, customersResult, predefinedSectorsResult] = await Promise.all([
+    // Fetch data, including fare classes
+    const [bookingResult, customersResult, predefinedSectorsResult, fareClassesResult] = await Promise.all([
         supabase
             .from('bookings')
+            // Make sure booking_sectors select includes fare_class_id
             .select(`
                 id, customer_id, booking_reference, booking_type, deadline, status, num_pax, created_at, updated_at,
                 customers ( id, company_name ),
-                booking_sectors ( *, predefined_sectors ( id, origin_code, destination_code, description ) )
+                booking_sectors ( *, fare_class_id, predefined_sectors ( id, origin_code, destination_code, description ) )
             `) 
             .eq('id', id)
             .order('created_at', { referencedTable: 'booking_sectors', ascending: true })
@@ -55,13 +56,20 @@ export default async function EditBookingPage({ params }: EditBookingPageProps) 
             .select('id, origin_code, destination_code, description')
             .order('origin_code', { ascending: true })
             .order('destination_code', { ascending: true })
-            .returns<PredefinedSector[]>()
+            .returns<PredefinedSector[]>(),
+        supabase // <-- Added fetch for fare classes
+            .from('fare_classes')
+            .select('id, name') 
+            .order('name', { ascending: true })
+            .returns<FareClass[]>()
     ]);
 
     const booking = bookingResult.data as FullBookingEditData | null;
     const customers = customersResult.data ?? [];
     const predefinedSectors = predefinedSectorsResult.data ?? [];
-    const error = bookingResult.error || customersResult.error || predefinedSectorsResult.error;
+    const fareClasses = fareClassesResult.data ?? []; // <-- Get fare classes
+    // Combine errors
+    const error = bookingResult.error || customersResult.error || predefinedSectorsResult.error || fareClassesResult.error; 
 
     // Type guard to ensure booking is not null and has the expected structure
     if (error || !booking || !booking.booking_sectors) {
@@ -74,7 +82,7 @@ export default async function EditBookingPage({ params }: EditBookingPageProps) 
         notFound(); 
     }
     
-    // Prepare initialData for the form, converting dates and structuring sectors
+    // Prepare initialData for the form, including fare_class_id
     const initialData = {
       customer_id: booking.customer_id,
       status: booking.status,
@@ -84,6 +92,7 @@ export default async function EditBookingPage({ params }: EditBookingPageProps) 
       sectors: booking.booking_sectors.map(sector => ({
           predefined_sector_id: sector.predefined_sector_id,
           travel_date: sector.travel_date ? new Date(sector.travel_date) : null, 
+          fare_class_id: sector.fare_class_id, // <-- Include fare_class_id
           flight_number: sector.flight_number || '',
           status: sector.status,
           num_pax: sector.num_pax,
@@ -108,6 +117,7 @@ export default async function EditBookingPage({ params }: EditBookingPageProps) 
                     mode="edit"
                     customers={customers}
                     predefinedSectors={predefinedSectors}
+                    fareClasses={fareClasses} // <-- Pass fareClasses
                     initialData={initialData}
                     bookingId={booking.id}
                 />

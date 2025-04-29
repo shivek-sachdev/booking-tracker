@@ -29,6 +29,7 @@ export const bookingSectorFormSchema = z.object({
     travel_date: z.date({
         invalid_type_error: "That's not a valid date!",
     }).optional().nullable(),
+    fare_class_id: z.string().uuid().optional().nullable(),
     flight_number: z.string().max(20).optional().nullable(),
     // Sector status only allows Confirmed or Waiting List
     status: z.enum(['Confirmed', 'Waiting List'] as [BookingStatus, ...BookingStatus[]], {
@@ -82,5 +83,18 @@ export const updateBookingActionSchema = z.object({
 // Type for form inference
 export type BookingFormData = z.infer<typeof bookingFormSchema>;
 export type UpdateBookingActionData = z.infer<typeof updateBookingActionSchema>;
+
+// Add Zod schema for fare class validation
+export const fareClassSchema = z.object({
+  name: z.string()
+    .min(1, { message: "Fare class name is required." })
+    .max(50, { message: "Name cannot exceed 50 characters." }),
+  description: z.string()
+    .max(255, { message: "Description cannot exceed 255 characters." })
+    .optional()
+    .nullable(),
+});
+
+export type FareClassFormData = z.infer<typeof fareClassSchema>;
 
 // Add other schemas here as needed 

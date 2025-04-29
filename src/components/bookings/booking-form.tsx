@@ -26,12 +26,13 @@ import {
 import { cn } from "@/lib/utils"; // For merging classNames
 import { bookingFormSchema, BookingFormData } from '@/lib/schemas';
 import { addBooking, updateBooking, type BookingActionState } from '@/app/bookings/actions'; // Use addBooking directly
-import type { Customer, PredefinedSector, BookingStatus } from '@/types/database';
+import type { Customer, PredefinedSector, BookingStatus, FareClass } from '@/types/database';
 
 // Add mode and initialData props
 interface BookingFormProps {
   customers: Customer[];
   predefinedSectors: PredefinedSector[]; 
+  fareClasses: FareClass[];
   mode: 'add' | 'edit-simple' | 'edit'; 
   bookingId?: string; // Required for edit modes
   initialData?: Partial<BookingFormData & { status?: BookingStatus }>; // Make initialData include status for edit mode
@@ -51,6 +52,7 @@ interface BookingFormProps {
 export function BookingForm({ 
     customers, 
     predefinedSectors, 
+    fareClasses,
     mode, // Mode can now be 'edit'
     bookingId, 
     initialData,
@@ -357,6 +359,35 @@ export function BookingForm({
                                       {/* Travel Date */}
                                       <FormField control={form.control} name={`sectors.${index}.travel_date`} render={({ field: sf }) => ( <FormItem className="flex flex-col"><FormLabel>Travel Date</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !sf.value && "text-muted-foreground")} >{sf.value ? format(sf.value, "PPP") : <span>Pick a date</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={sf.value ?? undefined} onSelect={sf.onChange} initialFocus /></PopoverContent></Popover><FormMessage /></FormItem> )}/>
                                       
+                                      {/* Fare Class Select (New) */}
+                                      <FormField
+                                        control={form.control}
+                                        name={`sectors.${index}.fare_class_id`}
+                                        render={({ field: sf }) => (
+                                          <FormItem>
+                                            <FormLabel>Fare Class</FormLabel>
+                                            <Select 
+                                              onValueChange={sf.onChange} 
+                                              defaultValue={sf.value ?? undefined} 
+                                            >
+                                              <FormControl>
+                                                <SelectTrigger>
+                                                  <SelectValue placeholder="Select fare class" />
+                                                </SelectTrigger>
+                                              </FormControl>
+                                              <SelectContent>
+                                                {fareClasses.map((fc) => (
+                                                  <SelectItem key={fc.id} value={fc.id}>
+                                                    {fc.name}
+                                                  </SelectItem>
+                                                ))}
+                                              </SelectContent>
+                                            </Select>
+                                            <FormMessage />
+                                          </FormItem>
+                                        )}
+                                      />
+
                                       {/* Flight Number Input */}
                                       <FormField control={form.control} name={`sectors.${index}.flight_number`} render={({ field: sf }) => ( <FormItem><FormLabel>Flight Number</FormLabel><FormControl><Input placeholder="e.g., TG123" {...sf} value={sf.value ?? ''}/></FormControl><FormMessage /></FormItem> )}/>
                                       
