@@ -84,9 +84,25 @@ export default async function DashboardPage() {
   const supabase = createSimpleServerClient();
 
   // Fetch total bookings and count by status
-  const { data: bookings } = await supabase
+  console.log('Attempting to fetch bookings...');
+  const { data: bookings, error: bookingsError } = await supabase
     .from('bookings')
     .select('id, booking_reference, status, deadline, customer_id, created_at, customers(company_name)');
+
+  if (bookingsError) {
+    console.error('Error fetching bookings:', {
+      message: bookingsError.message,
+      code: bookingsError.code,
+      details: bookingsError.details,
+      hint: bookingsError.hint
+    });
+    throw new Error(`Failed to fetch bookings: ${bookingsError.message}`);
+  }
+
+  console.log('Bookings data received:', {
+    count: bookings?.length || 0,
+    firstBooking: bookings?.[0] || null
+  });
 
   // Cast the data to the proper type using an unknown intermediate
   const bookingsData = (bookings as unknown) as BookingData[] || [];
@@ -190,13 +206,18 @@ export default async function DashboardPage() {
     `)
     .not('deadline', 'is', null)
     .not('status', 'eq', 'Cancelled') // Exclude cancelled bookings
+    .in('status', ['Confirmed', 'Waiting List']) // Only include these statuses
     .lte('deadline', tomorrowFormatted) // Get deadlines up to and including tomorrow
     .order("deadline", { ascending: true })
     .returns<DeadlineQueryResult[]>();
     
   if (deadlineError) {
-    console.error("Deadline fetch error:", deadlineError.message);
-    console.error("Full error:", deadlineError);
+    console.error("Supabase query error details:", {
+      message: deadlineError.message,
+      code: deadlineError.code,
+      details: deadlineError.details,
+      hint: deadlineError.hint
+    });
   } else {
     console.log(`Found ${approachingDeadlines?.length || 0} deadlines (today, tomorrow, and past)`);
     console.log("First deadline item:", approachingDeadlines?.[0]);
