@@ -12,9 +12,12 @@ import {
   Ticket,
   Menu, 
   X,
-  ChevronRight
+  ChevronRight,
+  ClipboardCheck,
+  Map,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Separator } from "@/components/ui/separator";
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -34,13 +37,19 @@ export function MainLayout({ children }: MainLayoutProps) {
     }
   };
 
-  // Navigation items with path and icon
-  const navItems = [
+  // Standard Navigation items
+  const standardNavItems = [
     { path: '/', label: 'Dashboard', icon: <LayoutDashboard className="h-4 w-4" /> },
     { path: '/bookings', label: 'Bookings', icon: <ClipboardList className="h-4 w-4" /> },
     { path: '/customers', label: 'Customers', icon: <Users className="h-4 w-4" /> },
     { path: '/sectors', label: 'Sectors', icon: <Plane className="h-4 w-4" /> },
     { path: '/fares', label: 'Fares', icon: <Ticket className="h-4 w-4" /> },
+  ];
+
+  // Tour Package Navigation items
+  const tourNavItems = [
+    { path: '/tour-packages', label: 'Tour Bookings', icon: <ClipboardCheck className="h-4 w-4" /> },
+    { path: '/tour-products', label: 'Tour Packages', icon: <Map className="h-4 w-4" /> },
   ];
 
   return (
@@ -62,7 +71,34 @@ export function MainLayout({ children }: MainLayoutProps) {
         </div>
 
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-          {navItems.map((item) => {
+          {/* Map Standard Items */}
+          {standardNavItems.map((item) => {
+            const isActive = pathname === item.path || (item.path !== '/' && pathname.startsWith(`${item.path}/`));
+            
+            return (
+              <Button 
+                key={item.path}
+                variant={isActive ? "secondary" : "ghost"} 
+                className={cn(
+                  "w-full justify-start mb-1",
+                  isActive && "bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300"
+                )}
+                asChild
+              >
+                <Link href={item.path} className="flex items-center" onClick={closeMobileMenu}>
+                  <span className="mr-2">{item.icon}</span> 
+                  <span>{item.label}</span>
+                  {isActive && <ChevronRight className="ml-auto h-4 w-4" />}
+                </Link>
+              </Button>
+            );
+          })}
+
+          {/* Separator */}
+          <Separator className="my-4" /> 
+
+          {/* Map Tour Items */}
+           {tourNavItems.map((item) => {
             const isActive = pathname === item.path || pathname.startsWith(`${item.path}/`);
             
             return (

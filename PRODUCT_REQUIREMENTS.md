@@ -1,0 +1,117 @@
+# Product Requirements Document: Booking Tracker Application
+
+**1. Introduction**
+
+*   **1.1 Purpose:** This document outlines the requirements for the Booking Tracker application. The application aims to provide a centralized platform for managing travel bookings, associated customer data, deadlines, and key performance metrics. It serves as an internal tool to improve operational efficiency and visibility into the booking process.
+*   **1.2 Scope:** The current scope includes user authentication, a central dashboard displaying key metrics and urgent tasks (deadlines), and likely sections for managing bookings, customers, and potentially fares/sectors (inferred from directory structure). **It also includes dedicated functionality for managing Tour Package bookings and their associated Tour Products.**
+*   **1.3 Target Audience:** Internal users such as booking agents, operations managers, or administrators responsible for overseeing and managing travel reservations **(both standard bookings and tour packages)**.
+
+**2. Goals**
+
+*   **2.1 Business Goals:**
+    *   Improve the efficiency of managing booking deadlines.
+    *   Provide a clear, real-time overview of booking activity and status.
+    *   Centralize customer booking information.
+    *   Track key performance indicators related to bookings.
+*   **2.2 User Goals:**
+    *   Quickly identify bookings requiring immediate attention (past or upcoming deadlines).
+    *   Easily view overall booking statistics and trends.
+    *   Access information about specific bookings, customers, and potentially fares.
+    *   Securely log in and access relevant data.
+
+**3. User Roles & Personas**
+
+*   **3.1 Booking Agent/Manager:** Primary user responsible for viewing the dashboard, managing bookings (implied), tracking deadlines, and possibly customer interactions.
+*   **3.2 Administrator (Optional/Future):** Might have broader access for user management or system configuration (not explicitly observed).
+
+**4. Functional Requirements**
+
+*   **4.1 Authentication:**
+    *   `FR-AUTH-01`: Users must be able to log in securely to access the application (inferred from `src/app/login` and `src/app/auth`). Supabase Auth is likely used.
+    *   `FR-AUTH-02`: The system should protect routes, ensuring only authenticated users can access the main application features (dashboard, etc.).
+*   **4.2 Dashboard (`src/app/page.tsx`):**
+    *   `FR-DASH-01`: The dashboard shall display key performance indicators (KPIs) including:
+        *   Total number of bookings.
+        *   Breakdown of bookings by status (e.g., Confirmed, Pending, Cancelled, Unconfirmed).
+        *   Total number of unique customers.
+    *   `FR-DASH-02`: The dashboard shall display booking activity trends, specifically the number of bookings created over the last 7 days.
+    *   `FR-DASH-03`: The dashboard shall display a list of top customers ranked by booking volume, showing the count and percentage contribution for each.
+    *   `FR-DASH-04`: The dashboard shall display a prioritized list of bookings with deadlines that are past due, due today, or due tomorrow.
+    *   `FR-DASH-05`: The deadline list shall include: Booking Reference, Customer Name, Earliest/Latest Travel Dates, Booking Status, and a clear Deadline Status indicator (e.g., "Overdue", "Due Today", "Due Tomorrow").
+    *   `FR-DASH-06`: The deadline list shall exclude 'Cancelled' bookings and only include statuses like 'Confirmed' or 'Waiting List'.
+    *   `FR-DASH-07`: Data displayed on the dashboard should be fetched dynamically from the backend (Supabase).
+*   **4.3 Booking Management (Inferred from `src/app/bookings`):**
+    *   `FR-BOOK-01`: Users should likely be able to view a list of all bookings.
+    *   `FR-BOOK-02`: Users should likely be able to view the details of a specific booking.
+    *   `FR-BOOK-03`: Users might be able to create, update, or delete bookings (CRUD operations - *needs confirmation by reviewing `src/app/bookings`*).
+*   **4.4 Customer Management (Inferred from `src/app/customers`):**
+    *   `FR-CUST-01`: Users should likely be able to view a list of customers.
+    *   `FR-CUST-02`: Users should likely be able to view details associated with a specific customer, potentially including their booking history.
+    *   `FR-CUST-03`: Users might be able to manage customer records (CRUD - *needs confirmation*).
+*   **4.5 Fare Management (Inferred from `src/app/fares`):**
+    *   `FR-FARE-01`: The system likely provides functionality to view or manage fare information (*needs confirmation*).
+*   **4.6 Sector Management (Inferred from `src/app/sectors`):**
+    *   `FR-SECT-01`: The system likely provides functionality related to booking sectors (e.g., flight legs, hotel stays) (*needs confirmation*).
+*   **4.7 Tour Product Management:**
+    *   `FR-TPRD-01`: Users shall be able to Create, Read, Update, and Delete (CRUD) entries in a master list of "Tour Products".
+    *   `FR-TPRD-02`: Each Tour Product should have at least a name/title and potentially other relevant details (e.g., description, default duration - TBD).
+    *   `FR-TPRD-03`: A dedicated section/page shall exist for managing Tour Products.
+*   **4.8 Tour Package Booking Management:**
+    *   `FR-TPKG-01`: Users shall be able to Create, Read, Update, and Delete (CRUD) Tour Package bookings.
+    *   `FR-TPKG-02`: When creating/editing a Tour Package booking, users must be able to select a "Tour Product" from the master list defined in FR-TPRD-01.
+    *   `FR-TPKG-03`: Users must be able to manually enter the final price for the selected Tour Product within the specific booking record.
+    *   `FR-TPKG-04`: Users must be able to enter the customer's name as free-form text directly into the Tour Package booking record (no mandatory link to the main `Customers` table).
+    *   `FR-TPKG-05`: Tour Package bookings should likely include relevant dates (e.g., booking date, travel start/end dates) and potentially a status.
+    *   `FR-TPKG-06`: A dedicated section/page shall exist for managing Tour Package bookings.
+
+**5. Non-Functional Requirements**
+
+*   **5.1 Performance:**
+    *   `NFR-PERF-01`: The application should load quickly, utilizing Next.js features like React Server Components (RSC) for efficient data fetching and rendering.
+    *   `NFR-PERF-02`: Database queries (Supabase) should be optimized for speed.
+*   **5.2 Usability:**
+    *   `NFR-USAB-01`: The user interface should be clean, intuitive, and easy to navigate. (Leverages Shadcn UI).
+    *   `NFR-USAB-02`: The application must be responsive and function correctly on various screen sizes (mobile-first approach with Tailwind CSS).
+    *   `NFR-USAB-03`: The main sidebar navigation shall visually separate standard booking management (`Fares`, `Customers`, `Bookings`, `Sectors`) from tour package management (`Tour Packages`, `Tour Products`) using a distinct separator (e.g., a horizontal line).
+*   **5.3 Reliability:**
+    *   `NFR-RELI-01`: The application should handle errors gracefully (e.g., display informative messages if data fetching fails). Next.js `error.tsx` conventions should be used.
+    *   `NFR-RELI-02`: Loading states should be indicated clearly to the user while data is being fetched (Next.js `loading.tsx`).
+*   **5.4 Security:**
+    *   `NFR-SECU-01`: User authentication must be secure.
+    *   `NFR-SECU-02`: Access to data should be properly controlled (potentially via Supabase Row Level Security - RLS, *assumption*).
+*   **5.5 Maintainability:**
+    *   `NFR-MAIN-01`: Code should follow established conventions (TypeScript, functional components, clear structure as per custom instructions).
+    *   `NFR-MAIN-02`: Dependencies should be managed clearly (`package.json`).
+
+**6. Data Model (High-Level)**
+
+Based on `src/app/page.tsx` and directory structure:
+
+*   **Bookings:** Contains booking reference, status, deadline, links to customer and sectors, timestamps.
+*   **Customers:** Contains company name, potentially contact details, and other identifiers.
+*   **Booking Sectors:** Details about specific parts of a booking (e.g., flights, hotels), including travel dates.
+*   **Users:** For authentication (managed by Supabase Auth).
+*   **Fares (Implied):** Details about pricing or fare rules.
+*   **Tour Products:** Master list of available tour packages (e.g., name, description).
+*   **Tour Package Bookings:** Records of specific tour package sales, linking to a Tour Product, storing the entered customer name, price, dates, and status.
+
+**7. Technology Stack**
+
+*   **Frontend Framework:** Next.js (App Router)
+*   **UI Language:** TypeScript
+*   **UI Library:** React
+*   **Component Library:** Shadcn UI
+*   **Styling:** Tailwind CSS
+*   **Database & Backend:** Supabase (PostgreSQL, Auth, Realtime - potentially)
+*   **State Management:** Primarily Server Components; potentially `useState`/`useEffect` in client components, `nuqs` for URL state (if used).
+*   **Deployment:** Likely Vercel (common pairing with Next.js).
+
+**8. Open Issues / Future Considerations**
+
+*   Detailed CRUD functionality for Bookings, Customers, Fares needs confirmation.
+*   Implementation of user roles and permissions beyond basic login.
+*   Notification system for deadlines or booking status changes.
+*   Advanced reporting features.
+*   Search and filtering capabilities within lists (Bookings, Customers).
+*   Define specific fields needed for `Tour Products` and `Tour Package Bookings` tables.
+*   Clarify if deadlines or specific statuses apply to Tour Package Bookings similarly to standard Bookings. 
