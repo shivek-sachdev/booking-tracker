@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import type { TourProduct } from "@/lib/types/tours";
 import { getBookingReferences, type BookingReference } from "@/app/bookings/actions";
 import { type TourPackageBookingWithProduct } from "@/lib/types/tours";
+import { getPaymentsForBooking } from "@/lib/actions/tour-package-bookings";
+import { type PaymentRecord } from "@/lib/types/tours";
 
 // Apply the workaround found in the bookings edit page
 interface EditTourPackageBookingPageProps {
@@ -28,16 +30,19 @@ export default async function EditTourPackageBookingPage({ params }: EditTourPac
   let booking: TourPackageBookingWithProduct | null;
   let products: TourProduct[];
   let bookingReferences: BookingReference[];
+  let payments: PaymentRecord[];
   let fetchError: string | null = null;
   try {
-      const [bookingResult, productsResult, referencesResult] = await Promise.all([
+      const [bookingResult, productsResult, referencesResult, paymentsResult] = await Promise.all([
         getTourPackageBookingById(id),
         getTourProducts(),
-        getBookingReferences()
+        getBookingReferences(),
+        getPaymentsForBooking(id)
       ]);
       booking = bookingResult;
       products = productsResult;
       bookingReferences = referencesResult;
+      payments = paymentsResult;
   } catch (error) {
       console.error("Error fetching data for edit page:", error);
       fetchError = error instanceof Error ? error.message : "Failed to load booking data.";
@@ -45,6 +50,7 @@ export default async function EditTourPackageBookingPage({ params }: EditTourPac
       booking = null;
       products = []; 
       bookingReferences = [];
+      payments = [];
   }
 
   // Handle general fetch error
@@ -86,6 +92,7 @@ export default async function EditTourPackageBookingPage({ params }: EditTourPac
         initialBooking={booking} 
         products={products ?? []} // Ensure products is always an array
         bookingReferences={bookingReferences ?? []}
+        payments={payments ?? []}
       />
     </div>
   );

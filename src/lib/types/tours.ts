@@ -31,6 +31,7 @@ export interface TourPackageBooking {
   status: TourPackageStatus;
   notes?: string | null;
   linked_booking_id?: string | null;
+  payment_slip_path?: string | null;
   created_at: string;
   updated_at: string;
   pax: number;
@@ -53,6 +54,7 @@ const TourPackageBookingBaseSchema = z.object({
   tour_product_id: z.string().uuid({ message: 'Please select a valid tour product.' }),
   customer_name: z.string().min(2, { message: 'Customer name is required.' }),
   price: z.coerce.number().positive({ message: 'Price must be a positive number.' }).optional().nullable(), // Use coerce for FormData string conversion
+  pax: z.coerce.number().int().positive({ message: 'PAX must be a positive number.' }).optional().nullable(),
   booking_date: z.coerce.date().optional().nullable(),
   travel_start_date: z.coerce.date().optional().nullable(),
   travel_end_date: z.coerce.date().optional().nullable(),
@@ -131,6 +133,20 @@ export interface TourPackageBooking extends Omit<z.infer<typeof TourPackageBooki
 
 // Interface for booking joined with product name
 export interface TourPackageBookingWithProduct extends TourPackageBooking {
-  // Change back to array based on build error message
-  tour_products: { name: string }[] | null;
+  tour_products: { name: string } | null;
+}
+
+// --- NEW: Payment Record Type ---
+export interface PaymentRecord {
+    id: string; // uuid
+    tour_package_booking_id: string; // varchar(5)
+    status_at_payment: TourPackageStatus; // Use the existing enum type
+    payment_slip_path: string; // text (path in storage)
+    uploaded_at: string; // timestamp with time zone
+}
+
+// --- NEW: Payment Ledger Item Type ---
+export interface PaymentLedgerItem extends PaymentRecord {
+    customer_name: string | null;
+    package_name: string | null;
 } 

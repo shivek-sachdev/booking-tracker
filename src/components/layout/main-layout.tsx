@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { 
   LayoutDashboard, 
@@ -15,9 +15,12 @@ import {
   ChevronRight,
   ClipboardCheck,
   Map,
+  LogOut,
+  CreditCard
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Separator } from "@/components/ui/separator";
+import { createClient } from '@/lib/supabase/client';
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -26,6 +29,8 @@ interface MainLayoutProps {
 export function MainLayout({ children }: MainLayoutProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const pathname = usePathname();
+  const router = useRouter();
+  const supabase = createClient();
 
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen);
@@ -51,6 +56,15 @@ export function MainLayout({ children }: MainLayoutProps) {
     { path: '/tour-packages', label: 'Tour Bookings', icon: <ClipboardCheck className="h-4 w-4" /> },
     { path: '/tour-products', label: 'Tour Packages', icon: <Map className="h-4 w-4" /> },
   ];
+
+  // Payment Navigation item
+  const paymentNavItem = { path: '/payments', label: 'Payments', icon: <CreditCard className="h-4 w-4" /> };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push('/login');
+    router.refresh();
+  };
 
   return (
     <div className="flex min-h-screen">
@@ -119,10 +133,36 @@ export function MainLayout({ children }: MainLayoutProps) {
               </Button>
             );
           })}
+
+          {/* Payments Link */}
+          {(() => { // IIFE to reuse logic easily
+            const item = paymentNavItem;
+            const isActive = pathname === item.path || pathname.startsWith(`${item.path}/`);
+            return (
+              <Button 
+                key={item.path}
+                variant={isActive ? "secondary" : "ghost"} 
+                className={cn(
+                  "w-full justify-start mb-1",
+                  isActive && "bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300"
+                )}
+                asChild
+              >
+                <Link href={item.path} className="flex items-center" onClick={closeMobileMenu}>
+                  <span className="mr-2">{item.icon}</span> 
+                  <span>{item.label}</span>
+                  {isActive && <ChevronRight className="ml-auto h-4 w-4" />}
+                </Link>
+              </Button>
+            );
+          })()}
         </nav>
         
-        <div className="p-4 border-t border-gray-200 dark:border-gray-700 text-xs text-muted-foreground">
-          <p>Booking Tracker v1.0</p>
+        <div className="flex items-center justify-between p-4 border-t border-gray-200 dark:border-gray-700 text-xs text-muted-foreground">
+          <span>Booking Tracker v1.0</span>
+          <Button variant="ghost" size="icon" title="Logout" onClick={handleLogout}>
+            <LogOut className="h-4 w-4" />
+          </Button>
         </div>
       </aside>
 

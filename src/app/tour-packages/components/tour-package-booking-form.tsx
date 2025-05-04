@@ -5,7 +5,7 @@ import { useFormStatus } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { toast } from "sonner";
 import { format } from "date-fns";
-import { CalendarIcon } from "lucide-react";
+import { CalendarIcon, Eye, UploadCloud, X as XIcon, Loader2 } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -31,11 +31,15 @@ import {
   TourProduct,
   TourPackageBooking,
   TourPackageStatusEnum,
-  TourPackageBookingSchema
+  TourPackageBookingSchema,
+  type TourPackageStatus,
+  type PaymentRecord
 } from '@/lib/types/tours'
 import {
   createTourPackageBooking,
   updateTourPackageBooking,
+  addPaymentRecord,
+  createPaymentSlipSignedUrl
 } from '@/lib/actions/tour-package-bookings'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -49,11 +53,14 @@ import {
     FormMessage,
 } from "@/components/ui/form";
 import type { BookingReference } from "@/app/bookings/actions";
+import { createClient } from '@/lib/supabase/client';
+import { Label } from "@/components/ui/label";
 
 interface TourPackageBookingFormProps {
   initialBooking: TourPackageBooking | null
   products: TourProduct[] // List of available products
   bookingReferences: BookingReference[] // <-- Add prop for references
+  payments?: PaymentRecord[] // <-- Add optional payments prop
   onSuccess?: () => void // Optional callback for successful submission
 }
 
@@ -78,9 +85,13 @@ const formatCurrency = (amount: number | null | undefined) => {
   return new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB' }).format(amount);
 };
 
-export function TourPackageBookingForm({ initialBooking, products, bookingReferences, onSuccess }: TourPackageBookingFormProps) {
+export function TourPackageBookingForm({ initialBooking, products, bookingReferences, payments, onSuccess }: TourPackageBookingFormProps) {
   const router = useRouter();
+  const supabase = createClient();
   const isEditing = !!initialBooking?.id;
+  const [selectedFile, setSelectedFile] = React.useState<File | null>(null);
+  const [isUploading, setIsUploading] = React.useState(false);
+  const [isViewUrlLoading, startViewUrlTransition] = React.useTransition();
 
   const form = useForm<TourPackageBookingFormValues>({
     resolver: zodResolver(TourPackageBookingSchema),
@@ -88,15 +99,13 @@ export function TourPackageBookingForm({ initialBooking, products, bookingRefere
       customer_name: initialBooking?.customer_name ?? '',
       tour_product_id: initialBooking?.tour_product_id ?? undefined,
       price: initialBooking?.price ?? undefined,
-      // Default PAX to 1
       pax: initialBooking?.pax ?? 1,
-      status: initialBooking?.status ?? 'Open', // Default status to 'Open'
-      // Default booking_date to today for new bookings
+      status: initialBooking?.status ?? 'Open',
       booking_date: initialBooking?.booking_date ? new Date(initialBooking.booking_date) : new Date(),
       travel_start_date: initialBooking?.travel_start_date ? new Date(initialBooking.travel_start_date) : undefined,
       travel_end_date: initialBooking?.travel_end_date ? new Date(initialBooking.travel_end_date) : undefined,
       notes: initialBooking?.notes ?? '',
-      linked_booking_id: initialBooking?.linked_booking_id ?? null, // <-- Set default value
+      linked_booking_id: initialBooking?.linked_booking_id ?? null,
     },
   });
 
@@ -120,97 +129,204 @@ export function TourPackageBookingForm({ initialBooking, products, bookingRefere
     return null;
   }, [watchedPrice, watchedPax]);
 
+  // Define payment statuses in component scope
+  const paymentStatuses: TourPackageStatus[] = ['Paid (1st installment)', 'Paid (Full Payment)'];
+
+  // Find payment records specifically for each status
+  const firstInstallmentPayment = React.useMemo(() => {
+    return payments?.find(p => p.status_at_payment === 'Paid (1st installment)');
+  }, [payments]);
+
+  const fullPaymentPayment = React.useMemo(() => {
+    return payments?.find(p => p.status_at_payment === 'Paid (Full Payment)');
+  }, [payments]);
+
+  // Determine if payment exists for the *currently selected* status
+  const paymentExistsForCurrentStatus = watchedStatus === 'Paid (1st installment)' 
+                                        ? !!firstInstallmentPayment 
+                                        : watchedStatus === 'Paid (Full Payment)' 
+                                            ? !!fullPaymentPayment 
+                                            : false;
+
+  // Get the payment record for the current status
+  const currentStatusPaymentRecord = watchedStatus === 'Paid (1st installment)' 
+                                ? firstInstallmentPayment 
+                                : watchedStatus === 'Paid (Full Payment)' 
+                                    ? fullPaymentPayment 
+                                    : null;
+
+  // Function to handle file selection
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      // Basic validation (optional: add more checks for size, type)
+      if (file.size > 5 * 1024 * 1024) { // 5MB limit
+        toast.error("File size exceeds 5MB limit.");
+        event.target.value = ''; // Clear the input
+        return;
+      }
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'application/pdf'];
+      if (!allowedTypes.includes(file.type)) {
+        toast.error("Invalid file type. Please upload an image (JPG, PNG, GIF) or PDF.");
+        event.target.value = ''; // Clear the input
+        return;
+      }
+      setSelectedFile(file);
+    } else {
+      setSelectedFile(null);
+    }
+  };
+
   // Client-side action handler using react-hook-form's handleSubmit
   const onSubmit = async (values: TourPackageBookingFormValues) => {
-    const formData = new FormData();
+    setIsUploading(false); 
+    let uploadedFilePath: string | null = null; // Reset uploaded path for this submission
+    let fileToUpload: File | null = selectedFile; // Hold the selected file
 
-    // Append data matching the Zod schema and expected by the server action
-    formData.append('customer_name', values.customer_name);
-    if (values.tour_product_id) formData.append('tour_product_id', values.tour_product_id);
-    if (values.price !== undefined && values.price !== null) formData.append('price', String(values.price));
-    // Add PAX to formData
-    formData.append('pax', String(values.pax));
-    formData.append('status', values.status);
-    if (values.booking_date) formData.append('booking_date', format(values.booking_date, 'yyyy-MM-dd'));
-    if (values.travel_start_date) formData.append('travel_start_date', format(values.travel_start_date, 'yyyy-MM-dd'));
-    if (values.travel_end_date) formData.append('travel_end_date', format(values.travel_end_date, 'yyyy-MM-dd'));
-    if (values.notes) formData.append('notes', values.notes);
-    // Append linked_booking_id if it exists
-    if (values.linked_booking_id) {
-      formData.append('linked_booking_id', values.linked_booking_id);
-    } else if (watchedStatus !== 'Negotiating') {
-        // Optionally send an empty string or handle null on the server 
-        // if the status is not Negotiating and no ID is selected, to clear the field.
-        // Let's send empty string for now to indicate clearing.
-        formData.append('linked_booking_id', ''); 
+    // Prepare FormData for the main booking update/create (WITHOUT payment slip path)
+    const bookingFormData = new FormData();
+    bookingFormData.append('customer_name', values.customer_name);
+    if (values.tour_product_id) bookingFormData.append('tour_product_id', values.tour_product_id);
+    if (values.price !== undefined && values.price !== null) bookingFormData.append('price', String(values.price));
+    bookingFormData.append('pax', String(values.pax));
+    bookingFormData.append('status', values.status);
+    if (values.booking_date) bookingFormData.append('booking_date', format(values.booking_date, 'yyyy-MM-dd'));
+    if (values.travel_start_date) bookingFormData.append('travel_start_date', format(values.travel_start_date, 'yyyy-MM-dd'));
+    if (values.travel_end_date) bookingFormData.append('travel_end_date', format(values.travel_end_date, 'yyyy-MM-dd'));
+    if (values.notes) bookingFormData.append('notes', values.notes);
+    if (values.linked_booking_id && values.linked_booking_id !== " ") {
+      bookingFormData.append('linked_booking_id', values.linked_booking_id);
+    } else {
+      bookingFormData.append('linked_booking_id', '');
     }
 
-    const boundUpdateAction = isEditing ? updateTourPackageBooking.bind(null, initialBooking.id) : null;
-    const actionToCall = boundUpdateAction ?? createTourPackageBooking;
+    // Determine the action and booking ID
+    const bookingIdToUse = isEditing ? initialBooking.id : null;
+    const boundUpdateAction = isEditing ? updateTourPackageBooking.bind(null, bookingIdToUse!) : null;
+    const bookingActionToCall = boundUpdateAction ?? createTourPackageBooking;
 
-    // Log the data being sent
-    console.log('Submitting booking with data:', Object.fromEntries(formData.entries()));
+    console.log('Submitting booking data:', Object.fromEntries(bookingFormData.entries()));
 
     try {
-      const result = await actionToCall({ message: '', errors: {} }, formData);
+        // --- Step 1: Create or Update Booking --- 
+        const bookingResult = await bookingActionToCall({ message: '', errors: {} }, bookingFormData);
+        console.log('Booking action response:', bookingResult);
 
-      // Log the response received
-      console.log('Server response:', result);
-
-      // Check specifically for the presence AND content of errors
-      if (result?.errors && Object.keys(result.errors).length > 0) {
-        // Handle server-side validation errors (display them)
-        console.error("Server validation errors:", result.errors);
-        // Optionally set form errors using form.setError
-        Object.entries(result.errors).forEach(([field, messages]) => {
-          if (messages) {
-            form.setError(field as keyof TourPackageBookingFormValues, {
-              type: 'server',
-              message: messages.join(', '),
+        if (bookingResult?.errors && Object.keys(bookingResult.errors).length > 0) {
+            // Handle booking validation errors
+            Object.entries(bookingResult.errors).forEach(([field, messages]) => {
+                if (messages) { form.setError(field as keyof TourPackageBookingFormValues, { type: 'server', message: messages.join(', ') }); }
             });
-          }
-        });
-        // Use the specific validation failure message if available, otherwise a generic one
-        toast.error(result.message || 'Failed to save booking due to validation errors.');
-      } 
-      // Check for a general error message *if* there are no specific field errors
-      else if (result?.message && !Object.keys(result.errors || {}).length) {
-          // Check if the message indicates success (customize this check if needed)
-          if (result.message.toLowerCase().includes('success')) {
-             // --- Success Handling --- 
-             if (!isEditing) {
-                 // Create Success: Show success message and redirect
-                 toast.success('Booking Created Successfully!'); 
-                 console.log("Redirecting to /tour-packages");
-                 router.push('/tour-packages'); 
-             } else {
-                 // Update Success: Show toast AND redirect
-                 toast.success(`Tour Booking updated successfully!`);
-                 console.log("Redirecting to /tour-packages after update");
-                 router.push('/tour-packages'); // Redirect after update
-                 // onSuccess?.(); // Keep or remove based on whether other actions needed
-             }
-          } else {
-             // Assume other messages are errors if not explicitly success
-             toast.error(result.message); 
-          }
-      } else {
-         // Fallback for unexpected scenarios or if result is null/undefined 
-         // (though the try/catch should handle most errors)
-         if (!isEditing) {
-             // Assume success if no errors and no message, proceed with redirect
-             toast.success('Booking Created Successfully!');
-             console.log("Redirecting to /tour-packages (fallback)");
-             router.push('/tour-packages');
-         } else {
-             toast.success('Tour Booking updated successfully! (fallback)');
-             onSuccess?.();
-         }
-      }
+            toast.error(bookingResult.message || 'Failed to save booking due to validation errors.');
+            return; // Stop if booking update fails
+        }
+        if (!bookingResult?.message?.toLowerCase().includes('success')) {
+            // Handle general booking update errors
+            toast.error(bookingResult.message || `Failed to ${isEditing ? 'update' : 'create'} booking.`);
+            return; // Stop if booking update fails
+        }
+
+        // --- Step 2: Upload File and Add Payment Record (if applicable) --- 
+        const finalBookingId = isEditing ? bookingIdToUse : bookingResult.bookingId;
+
+        if (fileToUpload && finalBookingId && paymentStatuses.includes(values.status)) {
+            console.log(`[onSubmit] Attempting to upload file for booking ${finalBookingId}, status ${values.status}`);
+            setIsUploading(true);
+            uploadedFilePath = null; // Ensure path is null initially for this attempt
+            const uniqueFileName = `${Date.now()}_${fileToUpload.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+            // Store path relative to the bucket root, without leading 'public/'
+            const filePath = `${finalBookingId}/${uniqueFileName}`; 
+            console.log(`[onSubmit] Uploading to path within bucket: ${filePath}`);
+
+            try {
+                // Upload to Storage
+                const { data: uploadData, error: uploadError } = await supabase.storage
+                  .from('payment-slips')
+                  .upload(filePath, fileToUpload, { cacheControl: '3600', upsert: true });
+                
+                // --- CRITICAL: Check upload error --- 
+                if (uploadError) {
+                    console.error('[onSubmit] Supabase Storage Upload Error:', uploadError);
+                    throw new Error(`Storage Upload Failed: ${uploadError.message}`); // Throw specific error
+                }
+                // --- End Critical Check ---
+
+                uploadedFilePath = uploadData?.path;
+                console.log(`[onSubmit] File uploaded successfully, path: ${uploadedFilePath}`);
+
+                if (!uploadedFilePath) {
+                    // This case should ideally not happen if uploadError is null, but check anyway
+                    console.error('[onSubmit] File path missing after successful upload!', uploadData);
+                    throw new Error("File uploaded but path was not returned.");
+                }
+
+                // Add Payment Record to DB via Server Action ONLY IF UPLOAD SUCCEEDED
+                console.log(`[onSubmit] Calling addPaymentRecord for booking ${finalBookingId}, status ${values.status}, path ${uploadedFilePath}`);
+                const paymentResult = await addPaymentRecord(finalBookingId, values.status, uploadedFilePath);
+
+                if (!paymentResult.success) {
+                    console.error(`[onSubmit] addPaymentRecord failed: ${paymentResult.message}`);
+                    // Attempt to delete the file we just uploaded if DB record failed
+                    console.warn(`Failed to add payment record for ${uploadedFilePath}, attempting to remove from storage.`);
+                    await supabase.storage.from('payment-slips').remove([uploadedFilePath]);
+                    throw new Error(paymentResult.message); // Throw error to be caught below
+                }
+
+                toast.success("Payment slip uploaded and record added!");
+                setSelectedFile(null); 
+                 const fileInput = document.getElementById('payment_slip') as HTMLInputElement;
+                 if (fileInput) fileInput.value = '';
+
+            } catch (uploadOrRecordError: any) {
+                // Use the improved logging from previous step
+                console.error(
+                    "Detailed upload/record error:", 
+                    uploadOrRecordError?.stack || uploadOrRecordError?.message || JSON.stringify(uploadOrRecordError) || "Unknown error"
+                );
+                const errorMessage = uploadOrRecordError?.message || 'An unknown error occurred during file processing.';
+                // Append info about booking success
+                toast.error(`Payment Slip Error: ${errorMessage}. Booking update was successful, but payment processing failed.`);
+                // Stop further success handling for the overall form
+                 setIsUploading(false); // Ensure loading state is off
+                 return; // Exit onSubmit
+            } finally {
+                setIsUploading(false);
+            }
+        }
+
+        // --- Step 3: Final Success Handling --- 
+        // This part is reached only if booking succeeded AND (no file needed OR file+payment record succeeded)
+        toast.success(`Booking ${isEditing ? 'updated' : 'created'} successfully!`);
+        if (!isEditing) {
+            router.push('/tour-packages'); // Redirect on create
+        } else {
+            // Update successful - redirect back to listing page
+            onSuccess?.(); 
+            router.push('/tour-packages'); // <-- Redirect on update
+            // router.refresh(); // No longer needed if redirecting
+        }
+
     } catch (error) {
-      console.error("Failed to submit form:", error);
-      toast.error('An unexpected error occurred.');
+        // Catch errors from the initial booking action call
+        console.error("Failed to submit booking form:", error);
+        toast.error('An unexpected error occurred during the booking process.');
     }
+  };
+
+  // Handler for viewing an existing slip
+  const handleViewExistingSlip = (slipPath: string | undefined) => {
+    if (!slipPath) {
+        toast.error("Payment slip path not found for this record.");
+        return;
+    }
+    startViewUrlTransition(async () => {
+        const result = await createPaymentSlipSignedUrl(slipPath);
+        if (result.success && result.url) {
+            window.open(result.url, '_blank', 'noopener,noreferrer');
+        } else {
+            toast.error(result.message || "Failed to get viewable link.");
+        }
+    });
   };
 
   return (
@@ -365,81 +481,155 @@ export function TourPackageBookingForm({ initialBooking, products, bookingRefere
                 </FormItem>
             </div>
 
-            {/* Wrapper for Status and Conditional Linked Booking Ref */}
+            {/* Wrapper for Status, Linked Ref, and Payment Slip Input */}
             {isEditing && (
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:col-span-2">
-                    {/* Status Select */}
-                    <FormField
-                      control={form.control}
-                      name="status"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Status</FormLabel>
-                          <Select
-                            onValueChange={field.onChange}
-                            value={field.value}
-                            name={field.name}
-                            required
-                          >
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select status..." />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {TourPackageStatusEnum.options.map((statusValue) => (
-                                <SelectItem key={statusValue} value={statusValue}>{statusValue}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    {/* Linked Ticket Booking Reference (Conditional on status AND edit mode) */}
-                    {watchedStatus === 'Negotiating' && (
+                <div className="grid grid-cols-1 gap-y-4 md:col-span-2">
+                    {/* Inner grid for Status and Linked Ref */}
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        {/* Status Select */}
                         <FormField
                           control={form.control}
-                          name="linked_booking_id"
+                          name="status"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Linked Ticket Booking Ref (Optional)</FormLabel>
+                              <FormLabel>Status</FormLabel>
                               <Select
-                                onValueChange={(value) => {
-                                  if (value === "__NONE__") {
-                                    field.onChange(null);
-                                  } else {
-                                    field.onChange(value);
-                                  }
-                                }} 
-                                value={field.value ?? ''}
+                                onValueChange={field.onChange}
+                                value={field.value}
                                 name={field.name}
+                                required
                               >
                                 <FormControl>
                                   <SelectTrigger>
-                                    <SelectValue placeholder="Select a booking reference..." />
+                                    <SelectValue placeholder="Select status..." />
                                   </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
-                                  <SelectItem value="__NONE__">None</SelectItem>
-                                  {bookingReferences.length === 0 ? (
-                                    <div className="px-2 py-1.5 text-sm text-muted-foreground">
-                                      No relevant ticket bookings found
-                                    </div>
-                                  ) : (
-                                    bookingReferences.map(ref => (
-                                      <SelectItem key={ref.id} value={ref.id}>
-                                        {ref.booking_reference || `ID: ${ref.id.substring(0,6)}...`}
-                                      </SelectItem>
-                                    ))
-                                  )}
+                                  {TourPackageStatusEnum.options.map((statusValue) => (
+                                    <SelectItem key={statusValue} value={statusValue}>{statusValue}</SelectItem>
+                                  ))}
                                 </SelectContent>
                               </Select>
                               <FormMessage />
                             </FormItem>
                           )}
                         />
+
+                        {/* Conditionally render Linked Booking Ref if status is NOT Open */}
+                        {watchedStatus !== 'Open' && (
+                          <FormField
+                            control={form.control}
+                            name="linked_booking_id"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Linked Booking Ref (Optional)</FormLabel>
+                                <Select
+                                  onValueChange={field.onChange}
+                                  defaultValue={field.value ?? undefined}
+                                >
+                                  <FormControl>
+                                    <SelectTrigger>
+                                      <SelectValue placeholder="Select booking ref..." />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    {/* Add explicit None option */}
+                                    <SelectItem value=" ">
+                                      -- None --
+                                    </SelectItem>
+                                    {bookingReferences.map((ref) => (
+                                      <SelectItem key={ref.id} value={ref.id}>
+                                        {ref.booking_reference || `ID: ${ref.id.substring(0,6)}...`}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        )}
+                    </div>
+
+                    {/* Conditionally render Payment Slip Upload Area */}
+                    {paymentStatuses.includes(watchedStatus) && (
+                        <div className="space-y-4 pt-2 border-t border-dashed mt-2">
+                            {/* Show this whole section ONLY if status requires payment */}
+                            {watchedStatus === 'Paid (Full Payment)' && firstInstallmentPayment && (
+                                <div className="flex items-center justify-between p-2 bg-muted/50 rounded">
+                                    <p className="text-sm text-muted-foreground">
+                                        <span className="font-medium">1st Installment Slip Uploaded:</span>
+                                    </p>
+                                    <Button 
+                                        type="button"
+                                        variant="secondary" 
+                                        size="sm"
+                                        onClick={() => handleViewExistingSlip(firstInstallmentPayment.payment_slip_path)}
+                                        disabled={isViewUrlLoading} 
+                                        title="View 1st Installment Slip"
+                                    >
+                                        {isViewUrlLoading ? (
+                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        ) : (
+                                            <Eye className="mr-2 h-4 w-4" />
+                                        )}
+                                        View 1st Slip
+                                    </Button>
+                                </div>
+                            )}
+
+                            {/* Handle Current Status Payment */} 
+                            <div className="mt-2">
+                                {/* If payment DOES NOT exist for current status, show UPLOAD */}
+                                {!paymentExistsForCurrentStatus && (
+                                    <>
+                                        <Label htmlFor="payment_slip">Upload Slip for <span className='font-semibold'>{watchedStatus}</span> (Max 5MB)</Label>
+                                        <div className="flex items-center gap-4 mt-1">
+                                            <Input
+                                                id="payment_slip"
+                                                type="file"
+                                                accept=".jpg,.jpeg,.png,.gif,.pdf"
+                                                onChange={handleFileChange}
+                                                className="flex-grow"
+                                                disabled={isUploading}
+                                            />
+                                            {isUploading && <UploadCloud className="h-5 w-5 animate-spin" />}
+                                        </div>
+                                        {selectedFile && (
+                                        <div className="text-sm text-muted-foreground flex items-center gap-2 mt-1">
+                                            <span>Selected: {selectedFile.name}</span>
+                                            <Button type="button" variant="ghost" size="sm" onClick={() => setSelectedFile(null)} className="text-red-500 hover:text-red-700">
+                                                <XIcon className="h-3 w-3 mr-1"/> Clear
+                                            </Button>
+                                        </div>
+                                        )}
+                                    </>
+                                )}
+                                {/* If payment DOES exist for current status, show VIEW */}
+                                {paymentExistsForCurrentStatus && currentStatusPaymentRecord && (
+                                    <div className="flex items-center justify-between">
+                                        <p className="text-sm text-muted-foreground">
+                                            <span className="text-green-600 font-medium">✅ Slip Uploaded</span> for "{watchedStatus}"
+                                        </p>
+                                        <Button 
+                                            type="button" 
+                                            variant="outline" 
+                                            size="sm"
+                                            onClick={() => handleViewExistingSlip(currentStatusPaymentRecord.payment_slip_path)}
+                                            disabled={isViewUrlLoading}
+                                            title={`View Slip for ${watchedStatus}`}
+                                        >
+                                            {isViewUrlLoading ? (
+                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                            ) : (
+                                                <Eye className="mr-2 h-4 w-4" />
+                                            )}
+                                            View Slip
+                                        </Button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
                     )}
                 </div>
             )}

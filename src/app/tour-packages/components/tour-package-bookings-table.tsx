@@ -191,7 +191,7 @@ const ActionsCell = ({ booking }: { booking: TourPackageBookingWithProduct }) =>
           open={isDeleteDialogOpen}
           onOpenChange={setIsDeleteDialogOpen}
           onConfirm={handleDelete}
-          bookingInfo={`Tour Booking for ${booking.customer_name} - ${booking.tour_products?.[0]?.name || 'Unknown Package'}`}
+          bookingInfo={`Tour Booking for ${booking.customer_name} - ${booking.tour_products?.name || 'Unknown Package'}`}
       />
     </>
   );
@@ -247,7 +247,7 @@ export function TourPackageBookingsTable({ data }: TourPackageBookingsTableProps
                     </TableCell>
                     <TableCell className="font-medium">{booking.customer_name}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {booking.tour_products?.[0]?.name || 'N/A'}
+                      {booking.tour_products?.name || 'N/A'}
                     </TableCell>
                     <TableCell>{formatCurrency(booking.price)}</TableCell>
                     <TableCell>{booking.pax ?? '-'}</TableCell>

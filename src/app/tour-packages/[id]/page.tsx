@@ -1,18 +1,42 @@
-import { type TourPackageBookingWithProduct, type TourPackageStatus } from "@/lib/types/tours";
-import { getTourPackageBookingById } from "@/lib/actions/tour-package-bookings";
+import { type TourPackageBookingWithProduct, type PaymentRecord, type TourPackageStatus } from "@/lib/types/tours";
+import { getTourPackageBookingById, getPaymentsForBooking } from "@/lib/actions/tour-package-bookings";
 import { notFound } from 'next/navigation';
 import Link from "next/link";
-import { ArrowLeft, Edit } from "lucide-react";
+import { ArrowLeft, Edit, Eye, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { 
+    Table, 
+    TableBody, 
+    TableCaption, 
+    TableCell, 
+    TableHead, 
+    TableHeader, 
+    TableRow 
+} from "@/components/ui/table";
+import { createClient } from '@/lib/supabase/client';
+import { PaymentActions } from '../components/payment-actions';
 
 // Reusable helper functions (consider moving to a shared utils file)
 const formatDate = (dateString: string | null | undefined): string => {
   if (!dateString) return '-';
   try {
-    const date = new Date(dateString + 'T00:00:00'); // Assume date part only
-    return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    // Directly parse the timestamp string
+    const date = new Date(dateString);
+    // Check if the date is valid after parsing
+    if (isNaN(date.getTime())) {
+        return 'Invalid Date';
+    }
+    // Format including time, but omit timezone name
+    return date.toLocaleString('en-US', { 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric', 
+        hour: 'numeric', 
+        minute: '2-digit' 
+    });
   } catch {
     return 'Invalid Date';
   }
@@ -79,16 +103,19 @@ export default async function TourPackageDetailPage({ params }: TourPackageDetai
   const resolvedParams = await params;
   const { id } = resolvedParams; // Use the resolved id
 
-  let booking: TourPackageBookingWithProduct | null;
+  // Fetch booking and payments concurrently
+  let booking: TourPackageBookingWithProduct | null = null;
+  let payments: PaymentRecord[] = [];
   let fetchError: string | null = null;
 
   try {
-      // Use the resolved id for fetching
-      booking = await getTourPackageBookingById(id); 
+      [booking, payments] = await Promise.all([
+          getTourPackageBookingById(id),
+          getPaymentsForBooking(id)
+      ]);
   } catch (error) {
-      console.error(`Error fetching booking details for ${id}:`, error);
-      fetchError = error instanceof Error ? error.message : "Failed to load booking details.";
-      booking = null;
+      console.error(`Error fetching details/payments for ${id}:`, error);
+      fetchError = error instanceof Error ? error.message : "Failed to load booking data.";
   }
 
   // Handle general fetch error
@@ -129,45 +156,89 @@ export default async function TourPackageDetailPage({ params }: TourPackageDetai
           </Button>
       </div>
 
-      {/* Booking Details Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Booking Details</CardTitle>
-          <CardDescription>Information for Booking ID: <span className="font-mono text-sm">{booking.id}</span></CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
-             {/* Left Column */}
-             <div>
-                 <DetailItem label="Customer Name" value={booking.customer_name} />
-                 <DetailItem label="Tour Package" value={booking.tour_products?.[0]?.name} />
-                 <DetailItem label="Booking Date" value={formatDate(booking.booking_date)} />
-                 <DetailItem label="Status" value={
-                     <Badge 
-                        variant={booking.status === 'Open' ? 'outline' : getStatusVariant(booking.status)}
-                        className={booking.status === 'Open' ? openStatusBadgeClass : ''}
-                     >
-                         {booking.status}
-                     </Badge>
-                 } />
-             </div>
-             {/* Right Column */}
-             <div>
-                 <DetailItem label="Price per PAX" value={formatCurrency(booking.price)} />
-                 <DetailItem label="PAX" value={booking.pax} />
-                 <DetailItem label="Travel Period" value={formatTravelPeriod(booking.travel_start_date, booking.travel_end_date)} />
-                 {/* Add Total if needed: Price * Pax */}
-                 {booking.price && booking.pax && (
-                     <DetailItem label="Calculated Total" value={formatCurrency(booking.price * booking.pax)} />
-                 )}
-             </div>
-             {/* Notes Section (Full Width) */}
-             <div className="md:col-span-2">
-                 <DetailItem label="Notes" value={booking.notes || <span className="italic text-muted-foreground">No notes</span>} />
-             </div>
-          </div>
-        </CardContent>
-      </Card>
+      <Tabs defaultValue="details">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="details">Booking Details</TabsTrigger>
+          <TabsTrigger value="payments">Payments</TabsTrigger>
+        </TabsList>
+        
+        {/* Details Tab Content */}
+        <TabsContent value="details">
+          <Card>
+            <CardHeader>
+              <CardTitle>Booking Details</CardTitle>
+              <CardDescription>Information for Booking ID: <span className="font-mono text-sm">{booking.id}</span></CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+                 {/* Left Column */}
+                 <div>
+                     <DetailItem label="Customer Name" value={booking.customer_name} />
+                     <DetailItem label="Tour Package" value={booking.tour_products?.name} />
+                     <DetailItem label="Booking Date" value={formatDate(booking.booking_date)} />
+                     <DetailItem label="Status" value={
+                         <Badge 
+                            variant={booking.status === 'Open' ? 'outline' : getStatusVariant(booking.status)}
+                            className={booking.status === 'Open' ? openStatusBadgeClass : ''}
+                         >
+                             {booking.status}
+                         </Badge>
+                     } />
+                 </div>
+                 {/* Right Column */}
+                 <div>
+                     <DetailItem label="Price per PAX" value={formatCurrency(booking.price)} />
+                     <DetailItem label="PAX" value={booking.pax} />
+                     <DetailItem label="Travel Period" value={formatTravelPeriod(booking.travel_start_date, booking.travel_end_date)} />
+                     {booking.price && booking.pax && (
+                         <DetailItem label="Calculated Total" value={formatCurrency(booking.price * booking.pax)} />
+                     )}
+                 </div>
+                 {/* Notes Section (Full Width) */}
+                 <div className="md:col-span-2">
+                     <DetailItem label="Notes" value={booking.notes || <span className="italic text-muted-foreground">No notes</span>} />
+                 </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Payments Tab Content */}
+        <TabsContent value="payments">
+          <Card>
+            <CardHeader>
+              <CardTitle>Payment History</CardTitle>
+              <CardDescription>Record of uploaded payment slips for this booking.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {payments.length === 0 ? (
+                <p className="text-sm text-muted-foreground italic">No payment records found.</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Uploaded Date</TableHead>
+                      <TableHead>Status at Payment</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {payments.map((payment) => (
+                      <TableRow key={payment.id}>
+                        <TableCell>{formatDate(payment.uploaded_at)}</TableCell>
+                        <TableCell>{payment.status_at_payment}</TableCell>
+                        <TableCell>
+                          <PaymentActions paymentId={payment.id} slipPath={payment.payment_slip_path} />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 } 
