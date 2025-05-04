@@ -30,8 +30,10 @@ export interface TourPackageBooking {
   travel_end_date?: string | null; // Assuming date only
   status: TourPackageStatus;
   notes?: string | null;
+  linked_booking_id?: string | null;
   created_at: string;
   updated_at: string;
+  pax: number;
   // Optional: Add joined tour product data if needed frequently
   // tour_products?: Pick<TourProduct, 'name'> | null; 
 }
@@ -55,7 +57,8 @@ const TourPackageBookingBaseSchema = z.object({
   travel_start_date: z.coerce.date().optional().nullable(),
   travel_end_date: z.coerce.date().optional().nullable(),
   status: TourPackageStatusEnum,
-  notes: z.string().optional(),
+  notes: z.string().optional().nullable(),
+  linked_booking_id: z.string().uuid().optional().nullable(),
   created_at: z.string().datetime().optional(),
   updated_at: z.string().datetime().optional(),
 });
@@ -87,6 +90,7 @@ export const TourPackageBookingSchema = z.object({
     travel_start_date: z.date().optional().nullable(),
     travel_end_date: z.date().optional().nullable(),
     notes: z.string().optional().nullable(),
+    linked_booking_id: z.string().uuid().optional().nullable(),
     created_at: z.string().datetime().optional(), // Keep for type inference if needed
     updated_at: z.string().datetime().optional(), // Keep for type inference if needed
 })
@@ -122,9 +126,11 @@ export interface TourPackageBooking extends Omit<z.infer<typeof TourPackageBooki
     notes?: string | null; // Explicitly allow null
     price?: number | null; // Explicitly allow null for price
     pax: number;
+    linked_booking_id?: string | null;
 }
 
-// Interface for booking joined with product name (adjust based on actual join query)
+// Interface for booking joined with product name
 export interface TourPackageBookingWithProduct extends TourPackageBooking {
-  tour_products: { name: string } | null; // Assuming join returns product details nested
+  // Change back to array based on build error message
+  tour_products: { name: string }[] | null;
 } 

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { PlusCircle } from 'lucide-react';
 import { TourPackageBookingsTable } from './components/tour-package-bookings-table'; // We will create this next
 import { DataTableSkeleton } from '@/components/data-table-skeleton';
-import type { TourPackageBookingWithProduct } from '@/lib/actions/tour-package-bookings';
+import type { TourPackageBookingWithProduct } from '@/lib/types/tours';
 
 export default async function TourPackageBookingsPage() {
   // Fetching data directly in RSC

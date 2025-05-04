@@ -1,11 +1,11 @@
-import { getTourPackageBookingById, type TourPackageBookingWithProduct } from "@/lib/actions/tour-package-bookings";
+import { type TourPackageBookingWithProduct, type TourPackageStatus } from "@/lib/types/tours";
+import { getTourPackageBookingById } from "@/lib/actions/tour-package-bookings";
 import { notFound } from 'next/navigation';
 import Link from "next/link";
 import { ArrowLeft, Edit } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import type { TourPackageStatus } from "@/lib/types/tours";
 
 // Reusable helper functions (consider moving to a shared utils file)
 const formatDate = (dateString: string | null | undefined): string => {
@@ -140,7 +140,7 @@ export default async function TourPackageDetailPage({ params }: TourPackageDetai
              {/* Left Column */}
              <div>
                  <DetailItem label="Customer Name" value={booking.customer_name} />
-                 <DetailItem label="Tour Package" value={booking.tour_products?.name} />
+                 <DetailItem label="Tour Package" value={booking.tour_products?.[0]?.name} />
                  <DetailItem label="Booking Date" value={formatDate(booking.booking_date)} />
                  <DetailItem label="Status" value={
                      <Badge 

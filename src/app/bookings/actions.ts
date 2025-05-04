@@ -5,6 +5,7 @@ import { createSimpleServerClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { bookingFormSchema, BookingFormData } from '@/lib/schemas';
 import type { BookingStatus } from '@/types/database';
+import type { Booking, BookingSector, PredefinedSector, Customer, FareClass } from "@/types/database";
 
 // Define a proper type for the sector data we parse from JSON
 interface SectorUpdateData {
@@ -289,4 +290,28 @@ export async function deleteBooking(bookingId: string): Promise<BookingActionSta
 
   // No redirect needed from here, handled client-side or via page navigation
   return { message: 'Booking deleted successfully.' };
+}
+
+// --- READ (Helper for fetching references) ---
+export interface BookingReference {
+  id: string; 
+  booking_reference: string | null; 
+}
+
+export async function getBookingReferences(): Promise<BookingReference[]> {
+  const supabase = createSimpleServerClient();
+  const relevantStatuses: BookingStatus[] = ['Confirmed', 'Waiting List']; // Define relevant statuses
+  
+  const { data, error } = await supabase
+    .from('bookings')
+    .select('id, booking_reference')
+    .in('status', relevantStatuses) // <-- Filter by status
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Database Error fetching booking references:', error);
+    return [];
+  }
+
+  return (data as BookingReference[]) || [];
 } 

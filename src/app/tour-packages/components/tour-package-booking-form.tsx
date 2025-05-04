@@ -48,10 +48,12 @@ import {
     FormLabel,
     FormMessage,
 } from "@/components/ui/form";
+import type { BookingReference } from "@/app/bookings/actions";
 
 interface TourPackageBookingFormProps {
   initialBooking: TourPackageBooking | null
   products: TourProduct[] // List of available products
+  bookingReferences: BookingReference[] // <-- Add prop for references
   onSuccess?: () => void // Optional callback for successful submission
 }
 
@@ -76,7 +78,7 @@ const formatCurrency = (amount: number | null | undefined) => {
   return new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB' }).format(amount);
 };
 
-export function TourPackageBookingForm({ initialBooking, products, onSuccess }: TourPackageBookingFormProps) {
+export function TourPackageBookingForm({ initialBooking, products, bookingReferences, onSuccess }: TourPackageBookingFormProps) {
   const router = useRouter();
   const isEditing = !!initialBooking?.id;
 
@@ -94,12 +96,19 @@ export function TourPackageBookingForm({ initialBooking, products, onSuccess }: 
       travel_start_date: initialBooking?.travel_start_date ? new Date(initialBooking.travel_start_date) : undefined,
       travel_end_date: initialBooking?.travel_end_date ? new Date(initialBooking.travel_end_date) : undefined,
       notes: initialBooking?.notes ?? '',
+      linked_booking_id: initialBooking?.linked_booking_id ?? null, // <-- Set default value
     },
   });
 
   // Watch price and pax fields for total calculation
   const watchedPrice = form.watch("price");
   const watchedPax = form.watch("pax");
+  const watchedStatus = form.watch("status");
+
+  // TEMPORARY LOGGING:
+  React.useEffect(() => {
+    console.log("Watched Status:", watchedStatus, ", Type:", typeof watchedStatus);
+  }, [watchedStatus]);
 
   // Calculate total
   const total = React.useMemo(() => {
@@ -126,6 +135,15 @@ export function TourPackageBookingForm({ initialBooking, products, onSuccess }: 
     if (values.travel_start_date) formData.append('travel_start_date', format(values.travel_start_date, 'yyyy-MM-dd'));
     if (values.travel_end_date) formData.append('travel_end_date', format(values.travel_end_date, 'yyyy-MM-dd'));
     if (values.notes) formData.append('notes', values.notes);
+    // Append linked_booking_id if it exists
+    if (values.linked_booking_id) {
+      formData.append('linked_booking_id', values.linked_booking_id);
+    } else if (watchedStatus !== 'Negotiating') {
+        // Optionally send an empty string or handle null on the server 
+        // if the status is not Negotiating and no ID is selected, to clear the field.
+        // Let's send empty string for now to indicate clearing.
+        formData.append('linked_booking_id', ''); 
+    }
 
     const boundUpdateAction = isEditing ? updateTourPackageBooking.bind(null, initialBooking.id) : null;
     const actionToCall = boundUpdateAction ?? createTourPackageBooking;
@@ -139,8 +157,8 @@ export function TourPackageBookingForm({ initialBooking, products, onSuccess }: 
       // Log the response received
       console.log('Server response:', result);
 
-      // Check specifically for the presence of errors
-      if (result?.errors) {
+      // Check specifically for the presence AND content of errors
+      if (result?.errors && Object.keys(result.errors).length > 0) {
         // Handle server-side validation errors (display them)
         console.error("Server validation errors:", result.errors);
         // Optionally set form errors using form.setError
@@ -277,8 +295,8 @@ export function TourPackageBookingForm({ initialBooking, products, onSuccess }: 
               )}
             />
 
-            {/* Wrapper Div for Price and PAX */}
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:col-span-2">
+            {/* Wrapper Div for Price, PAX, and Total */}
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3 md:col-span-2"> 
                 {/* Price */}
                 <FormField
                     control={form.control}
@@ -288,7 +306,6 @@ export function TourPackageBookingForm({ initialBooking, products, onSuccess }: 
                             <FormLabel>Price per PAX (Optional)</FormLabel>
                             <FormControl>
                                 <div className="relative flex items-center">
-                                    {/* <DollarSign className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /> */}
                                     <Input
                                         type="number"
                                         step="0.01"
@@ -324,55 +341,107 @@ export function TourPackageBookingForm({ initialBooking, products, onSuccess }: 
                                     {...field}
                                     onChange={(e) => {
                                         const value = e.target.value;
-                                        // Ensure integer conversion
                                         field.onChange(value === '' ? undefined : parseInt(value, 10)); 
                                     }}
                                  />
                             </FormControl>
                             <FormMessage />
-                            {/* Display Total */}
-                            {total !== null && (
-                                <p className="text-sm font-medium text-muted-foreground pt-1">
-                                    Total: {formatCurrency(total)}
-                                </p>
-                            )}
                         </FormItem>
                     )}
                 />
+                
+                {/* Total Display (Read-only) */}
+                <FormItem>
+                    <FormLabel>Total</FormLabel>
+                    <FormControl>
+                        <Input 
+                            readOnly 
+                            disabled // Use disabled for styling consistency
+                            value={total !== null ? formatCurrency(total) : '-'} 
+                            className="disabled:cursor-default disabled:opacity-100" // Adjust disabled styles
+                        />
+                    </FormControl>
+                    {/* No FormMessage needed for read-only field */}
+                </FormItem>
             </div>
 
-            {/* Status Select (Only show on Edit) */}
+            {/* Wrapper for Status and Conditional Linked Booking Ref */}
             {isEditing && (
-                <FormField
-                  control={form.control}
-                  name="status"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Status</FormLabel>
-                      <Select
-                        onValueChange={field.onChange}
-                        value={field.value}
-                        name={field.name}
-                        required
-                        // No longer need disabled prop, as the field is hidden on create
-                        // disabled={!isEditing}
-                      >
-                        <FormControl>
-                          {/* Remove class names related to disabled state */}
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select status..." />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {TourPackageStatusEnum.options.map((statusValue) => (
-                            <SelectItem key={statusValue} value={statusValue}>{statusValue}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:col-span-2">
+                    {/* Status Select */}
+                    <FormField
+                      control={form.control}
+                      name="status"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Status</FormLabel>
+                          <Select
+                            onValueChange={field.onChange}
+                            value={field.value}
+                            name={field.name}
+                            required
+                          >
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select status..." />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {TourPackageStatusEnum.options.map((statusValue) => (
+                                <SelectItem key={statusValue} value={statusValue}>{statusValue}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    {/* Linked Ticket Booking Reference (Conditional on status AND edit mode) */}
+                    {watchedStatus === 'Negotiating' && (
+                        <FormField
+                          control={form.control}
+                          name="linked_booking_id"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Linked Ticket Booking Ref (Optional)</FormLabel>
+                              <Select
+                                onValueChange={(value) => {
+                                  if (value === "__NONE__") {
+                                    field.onChange(null);
+                                  } else {
+                                    field.onChange(value);
+                                  }
+                                }} 
+                                value={field.value ?? ''}
+                                name={field.name}
+                              >
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Select a booking reference..." />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value="__NONE__">None</SelectItem>
+                                  {bookingReferences.length === 0 ? (
+                                    <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                                      No relevant ticket bookings found
+                                    </div>
+                                  ) : (
+                                    bookingReferences.map(ref => (
+                                      <SelectItem key={ref.id} value={ref.id}>
+                                        {ref.booking_reference || `ID: ${ref.id.substring(0,6)}...`}
+                                      </SelectItem>
+                                    ))
+                                  )}
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                    )}
+                </div>
             )}
 
             {/* Wrapper Div for Start and End Dates */}

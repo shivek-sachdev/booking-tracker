@@ -2,7 +2,7 @@
 
 import { createSimpleServerClient } from '@/lib/supabase/server';
 // Remove TourPackageBookingWithProduct import
-import { TourPackageBookingSchema, type TourPackageBooking, type TourProduct } from '@/lib/types/tours';
+import { TourPackageBookingSchema, type TourPackageBooking, type TourProduct, type TourPackageBookingWithProduct } from '@/lib/types/tours';
 import { revalidatePath } from 'next/cache';
 import crypto from 'crypto'; // Import crypto for random bytes
 
@@ -33,16 +33,23 @@ export async function createTourPackageBooking(
 ): Promise<FormState> {
   const supabase = createSimpleServerClient();
 
-  // 1. Validate form data (excluding ID)
+  // 1. Prepare data for validation
   const rawFormData = Object.fromEntries(formData.entries());
+  
+  // Separate linked_booking_id and convert empty string to null
+  const { linked_booking_id: rawLinkedId, ...otherRawData } = rawFormData;
+  const processedLinkedId = rawLinkedId === '' ? null : rawLinkedId as string | null;
+  
   const formDataForValidation = {
-      ...rawFormData,
-      booking_date: rawFormData.booking_date ? new Date(rawFormData.booking_date as string) : null,
-      travel_start_date: rawFormData.travel_start_date ? new Date(rawFormData.travel_start_date as string) : null,
-      travel_end_date: rawFormData.travel_end_date ? new Date(rawFormData.travel_end_date as string) : null,
+      ...otherRawData, // Spread the rest of the raw data
+      linked_booking_id: processedLinkedId, // Add the processed value back
+      // Coerce dates
+      booking_date: otherRawData.booking_date ? new Date(otherRawData.booking_date as string) : null,
+      travel_start_date: otherRawData.travel_start_date ? new Date(otherRawData.travel_start_date as string) : null,
+      travel_end_date: otherRawData.travel_end_date ? new Date(otherRawData.travel_end_date as string) : null,
   };
 
-  // Use the schema that omits ID for validation
+  // Validate using the schema that expects optional/nullable UUID
   const validatedFields = TourPackageBookingSchema.safeParse(formDataForValidation);
 
   if (!validatedFields.success) {
@@ -58,10 +65,11 @@ export async function createTourPackageBooking(
     };
   }
 
-  // Destructure validated data
+  // Destructure validated data (including the new field)
   const { 
     customer_name, tour_product_id, price, pax, status, 
-    booking_date, travel_start_date, travel_end_date, notes 
+    booking_date, travel_start_date, travel_end_date, notes, 
+    linked_booking_id // <-- Destructure new field
   } = validatedFields.data;
 
   // 2. Generate Unique 5-Character Alphanumeric ID
@@ -97,9 +105,9 @@ export async function createTourPackageBooking(
     return { message: 'Database Error: Could not generate a unique booking ID. Please try again.' };
   }
 
-  // 3. Prepare data for Supabase (including generated ID)
+  // 3. Prepare data for Supabase (including generated ID and potentially null linked ID)
   const dataToInsert = {
-      id: uniqueId, // Include the generated ID
+      id: uniqueId,
       customer_name,
       tour_product_id,
       price,
@@ -109,6 +117,7 @@ export async function createTourPackageBooking(
       travel_start_date: travel_start_date?.toISOString(),
       travel_end_date: travel_end_date?.toISOString(),
       notes,
+      linked_booking_id: linked_booking_id, // Use validated data
   };
 
   // 4. Insert data into Supabase
@@ -141,7 +150,7 @@ export async function createTourPackageBooking(
 
 // --- UPDATE ---
 export async function updateTourPackageBooking(
-  id: string, // Changed back to string
+  id: string,
   prevState: FormState,
   formData: FormData
 ): Promise<FormState> {
@@ -149,16 +158,23 @@ export async function updateTourPackageBooking(
 
   const supabase = createSimpleServerClient();
 
-  // 1. Validate form data including PAX
+  // 1. Prepare data for validation
   const rawFormData = Object.fromEntries(formData.entries());
+  
+  // Separate linked_booking_id and convert empty string to null
+  const { linked_booking_id: rawLinkedId, ...otherRawData } = rawFormData;
+  const processedLinkedId = rawLinkedId === '' ? null : rawLinkedId as string | null;
+  
   const formDataForValidation = {
-      ...rawFormData,
-      booking_date: rawFormData.booking_date ? new Date(rawFormData.booking_date as string) : null,
-      travel_start_date: rawFormData.travel_start_date ? new Date(rawFormData.travel_start_date as string) : null,
-      travel_end_date: rawFormData.travel_end_date ? new Date(rawFormData.travel_end_date as string) : null,
+      ...otherRawData, // Spread the rest of the raw data
+      linked_booking_id: processedLinkedId, // Add the processed value back
+      // Coerce dates
+      booking_date: otherRawData.booking_date ? new Date(otherRawData.booking_date as string) : null,
+      travel_start_date: otherRawData.travel_start_date ? new Date(otherRawData.travel_start_date as string) : null,
+      travel_end_date: otherRawData.travel_end_date ? new Date(otherRawData.travel_end_date as string) : null,
   };
   
-  // Use the base schema directly (it already includes .omit)
+  // Validate using the schema that expects optional/nullable UUID
   const validatedFields = TourPackageBookingSchema.safeParse(formDataForValidation);
 
   if (!validatedFields.success) {
@@ -174,7 +190,7 @@ export async function updateTourPackageBooking(
     };
   }
 
-  // Destructure validated data including PAX
+  // Destructure validated data (including the new field)
   const { 
       customer_name, 
       tour_product_id, 
@@ -184,7 +200,8 @@ export async function updateTourPackageBooking(
       booking_date, 
       travel_start_date, 
       travel_end_date, 
-      notes 
+      notes,
+      linked_booking_id // <-- Destructure new field
   } = validatedFields.data;
 
   // 2. Prepare data for Supabase update
@@ -198,6 +215,7 @@ export async function updateTourPackageBooking(
       travel_start_date: travel_start_date?.toISOString(),
       travel_end_date: travel_end_date?.toISOString(),
       notes,
+      linked_booking_id: linked_booking_id, // Use validated data
       updated_at: new Date().toISOString(), // Update timestamp
   };
 
@@ -272,43 +290,49 @@ export async function deleteTourPackageBooking(id: string): Promise<{ message: s
 
 // --- READ (for Server Components/Actions) ---
 
-// Define the shape of the booking with the joined product name
+// Define the shape of the booking with the joined product name - MOVED TO types/tours.ts
+/*
 export interface TourPackageBookingWithProduct extends TourPackageBooking {
-  tour_products: Pick<TourProduct, 'name'> | null; // Select only the name
+  tour_products: { name: string }[] | null;
 }
+*/
 
+// Ensure the select includes the new field and explicitly lists others
 export async function getTourPackageBookings(): Promise<TourPackageBookingWithProduct[]> {
   const supabase = createSimpleServerClient();
   const { data, error } = await supabase
     .from('tour_package_bookings')
-    // Join with tour_products table to get the product name
     .select(`
-      *,
+      id, customer_name, tour_product_id, price, pax, status, booking_date, travel_start_date, travel_end_date, notes, created_at, updated_at, 
+      linked_booking_id,
       tour_products ( name )
     `)
-    // Sort by creation date first (newest first)
     .order('created_at', { ascending: false })
-    // Then by booking date (newest first) as a secondary sort
     .order('booking_date', { ascending: false, nullsFirst: false });
 
   if (error) {
     console.error('Database Error fetching tour package bookings:', error);
     return [];
   }
-  // Cast to the extended type. Ensure the select statement matches the type.
+  // Log the raw data structure returned by Supabase
+  console.log("Raw data from getTourPackageBookings:", JSON.stringify(data, null, 2));
+  
+  // Type assertion should now be safer
   return (data as TourPackageBookingWithProduct[]) || [];
 }
 
-export async function getTourPackageBookingById(id: string): Promise<TourPackageBookingWithProduct | null> { // Changed back to string
+// Ensure the select includes the new field and explicitly lists others
+export async function getTourPackageBookingById(id: string): Promise<TourPackageBookingWithProduct | null> {
   if (!id) return null;
   const supabase = createSimpleServerClient();
   const { data, error } = await supabase
     .from('tour_package_bookings')
     .select(`
-      *,
+      id, customer_name, tour_product_id, price, pax, status, booking_date, travel_start_date, travel_end_date, notes, created_at, updated_at, 
+      linked_booking_id,
       tour_products ( name )
     `)
-    .eq('id', id) // ID is already a string
+    .eq('id', id)
     .single();
 
   if (error) {
@@ -318,6 +342,6 @@ export async function getTourPackageBookingById(id: string): Promise<TourPackage
      }
     return null;
   }
-
+  // Type assertion should now be safer
   return data as TourPackageBookingWithProduct || null;
 } 

@@ -35,8 +35,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 
-import { type TourPackageBookingWithProduct } from "@/lib/actions/tour-package-bookings";
-import type { TourPackageStatus } from "@/lib/types/tours";
+import { type TourPackageBookingWithProduct, type TourPackageStatus } from "@/lib/types/tours";
 import { deleteTourPackageBooking } from "@/lib/actions/tour-package-bookings";
 
 // --- Helper Functions ---
@@ -192,7 +191,7 @@ const ActionsCell = ({ booking }: { booking: TourPackageBookingWithProduct }) =>
           open={isDeleteDialogOpen}
           onOpenChange={setIsDeleteDialogOpen}
           onConfirm={handleDelete}
-          bookingInfo={`Tour Booking for ${booking.customer_name} - ${booking.tour_products?.name || 'Unknown Package'}`}
+          bookingInfo={`Tour Booking for ${booking.customer_name} - ${booking.tour_products?.[0]?.name || 'Unknown Package'}`}
       />
     </>
   );
@@ -234,40 +233,46 @@ export function TourPackageBookingsTable({ data }: TourPackageBookingsTableProps
           </TableHeader>
           <TableBody>
             {data?.length ? (
-              data.map((booking) => (
-                <TableRow 
-                  key={booking.id}
-                  onClick={() => handleRowClick(booking.id)}
-                  className="cursor-pointer"
-                >
-                  <TableCell className="font-mono text-xs text-muted-foreground">
-                    {booking.id}
-                  </TableCell>
-                  <TableCell className="font-medium">{booking.customer_name}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{booking.tour_products?.name || 'N/A'}</TableCell>
-                  <TableCell>{formatCurrency(booking.price)}</TableCell>
-                  <TableCell>{booking.pax ?? '-'}</TableCell>
-                  <TableCell>{formatDate(booking.booking_date)}</TableCell>
-                  <TableCell>{formatTravelPeriod(booking.travel_start_date, booking.travel_end_date)}</TableCell>
-                  <TableCell>
-                    {booking.status === 'Open' ? (
-                       <Badge 
-                          variant="outline"
-                          className="border-yellow-400 bg-yellow-50 text-yellow-700"
-                       >
-                          {booking.status}
-                       </Badge>
-                    ) : (
-                       <Badge variant={getStatusVariant(booking.status)}>
-                          {booking.status}
-                       </Badge>
-                    )}
-                  </TableCell>
-                  <TableCell onClick={(e) => e.stopPropagation()}>
-                    <ActionsCell booking={booking} />
-                  </TableCell>
-                </TableRow>
-              ))
+              data.map((booking) => {
+                // Log the booking object as received by the table component
+                console.log("Booking object in table:", booking);
+                return (
+                  <TableRow 
+                    key={booking.id}
+                    onClick={() => handleRowClick(booking.id)}
+                    className="cursor-pointer"
+                  >
+                    <TableCell className="font-mono text-xs text-muted-foreground">
+                      {booking.id}
+                    </TableCell>
+                    <TableCell className="font-medium">{booking.customer_name}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {booking.tour_products?.[0]?.name || 'N/A'}
+                    </TableCell>
+                    <TableCell>{formatCurrency(booking.price)}</TableCell>
+                    <TableCell>{booking.pax ?? '-'}</TableCell>
+                    <TableCell>{formatDate(booking.booking_date)}</TableCell>
+                    <TableCell>{formatTravelPeriod(booking.travel_start_date, booking.travel_end_date)}</TableCell>
+                    <TableCell>
+                      {booking.status === 'Open' ? (
+                         <Badge 
+                            variant="outline"
+                            className="border-yellow-400 bg-yellow-50 text-yellow-700"
+                         >
+                            {booking.status}
+                         </Badge>
+                      ) : (
+                         <Badge variant={getStatusVariant(booking.status)}>
+                            {booking.status}
+                         </Badge>
+                      )}
+                    </TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <ActionsCell booking={booking} />
+                    </TableCell>
+                  </TableRow>
+                );
+              })
             ) : (
               <TableRow>
                 <TableCell colSpan={headers.length} className="h-24 text-center">

@@ -1,4 +1,4 @@
-import { getTourPackageBookingById, type TourPackageBookingWithProduct } from "@/lib/actions/tour-package-bookings";
+import { getTourPackageBookingById } from "@/lib/actions/tour-package-bookings";
 import { getTourProducts } from "@/lib/actions/tour-products";
 import { TourPackageBookingForm } from "../../components/tour-package-booking-form";
 import { notFound } from 'next/navigation';
@@ -6,6 +6,8 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { TourProduct } from "@/lib/types/tours";
+import { getBookingReferences, type BookingReference } from "@/app/bookings/actions";
+import { type TourPackageBookingWithProduct } from "@/lib/types/tours";
 
 // Apply the workaround found in the bookings edit page
 interface EditTourPackageBookingPageProps {
@@ -25,20 +27,24 @@ export default async function EditTourPackageBookingPage({ params }: EditTourPac
   // Fetch the specific booking and the list of all products concurrently
   let booking: TourPackageBookingWithProduct | null;
   let products: TourProduct[];
+  let bookingReferences: BookingReference[];
   let fetchError: string | null = null;
   try {
-      const [bookingResult, productsResult] = await Promise.all([
+      const [bookingResult, productsResult, referencesResult] = await Promise.all([
         getTourPackageBookingById(id),
-        getTourProducts()
+        getTourProducts(),
+        getBookingReferences()
       ]);
       booking = bookingResult;
       products = productsResult;
+      bookingReferences = referencesResult;
   } catch (error) {
       console.error("Error fetching data for edit page:", error);
       fetchError = error instanceof Error ? error.message : "Failed to load booking data.";
       // Set defaults or handle error state
       booking = null;
       products = []; 
+      bookingReferences = [];
   }
 
   // Handle general fetch error
@@ -79,6 +85,7 @@ export default async function EditTourPackageBookingPage({ params }: EditTourPac
       <TourPackageBookingForm 
         initialBooking={booking} 
         products={products ?? []} // Ensure products is always an array
+        bookingReferences={bookingReferences ?? []}
       />
     </div>
   );

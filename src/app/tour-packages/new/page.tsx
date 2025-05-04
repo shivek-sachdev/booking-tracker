@@ -2,7 +2,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import { Button } from "@/components/ui/button";
 import { getTourProducts } from "@/lib/actions/tour-products"; // Action to fetch products
-import { TourPackageBookingForm } from "@/app/tour-packages/components/tour-package-booking-form"; // Corrected import path
+import { TourPackageBookingForm } from "../components/tour-package-booking-form"; // Corrected import path
 import type { TourProduct } from "@/lib/types/tours"; // Import the type
 import {
   Card,
@@ -12,38 +12,20 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { ArrowLeft } from 'lucide-react';
+// Import the action and type for booking references
+import { getBookingReferences, type BookingReference } from "@/app/bookings/actions";
 
 // Ensure the page is dynamically rendered if needed, but often data fetching makes it dynamic anyway
 // export const dynamic = "force-dynamic";
 
 export default async function NewTourPackageBookingPage() {
-  // Fetch products directly in the Server Component
-  let products: TourProduct[];
-  let fetchError: string | null = null;
-
-  try {
-    // getTourProducts returns the array directly or throws/returns empty on error
-    products = await getTourProducts();
-  } catch (error) {
-     console.error("Failed to fetch tour products:", error);
-     products = []; // Ensure products is an empty array on error
-     fetchError = error instanceof Error ? error.message : "An unknown error occurred while fetching products.";
-  }
+  // Fetch products and booking references concurrently
+  const [products, bookingReferences] = await Promise.all([
+    getTourProducts(),
+    getBookingReferences()
+  ]);
 
   // Handle error fetching products
-  if (fetchError) {
-    return (
-        <div className="container mx-auto p-4">
-            <p className="text-red-500">Error fetching tour products: {fetchError}</p>
-            <Button variant="outline" asChild>
-                <Link href="/tour-packages">
-                    <ArrowLeft className="mr-2 h-4 w-4" /> Back to Bookings
-                </Link>
-            </Button>
-        </div>
-    );
-  }
-
   if (!products || products.length === 0) {
      // Handle case where no products are available
      return (
@@ -82,7 +64,11 @@ export default async function NewTourPackageBookingPage() {
             </Button>
        </div>
       {/* Render the client component form, passing server-fetched data */}
-      <TourPackageBookingForm initialBooking={null} products={products} />
+      <TourPackageBookingForm 
+        initialBooking={null} 
+        products={products} 
+        bookingReferences={bookingReferences} // Pass the fetched references
+      />
     </div>
   );
 } 
