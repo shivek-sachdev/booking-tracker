@@ -143,10 +143,19 @@ export interface PaymentRecord {
     status_at_payment: TourPackageStatus; // Use the existing enum type
     payment_slip_path: string; // text (path in storage)
     uploaded_at: string; // timestamp with time zone
+    // Verification Fields
+    is_verified?: boolean | null;
+    verified_amount?: number | null;
+    verified_payment_date?: string | null; // Store as ISO string or Date object? Let's use string for now
+    verified_origin_bank?: string | null;
+    verified_dest_bank?: string | null;
+    verification_error?: string | null;
+    verified_at?: string | null; // <-- Add verified_at timestamp
 }
 
 // --- NEW: Payment Ledger Item Type ---
 export interface PaymentLedgerItem extends PaymentRecord {
     customer_name: string | null;
     package_name: string | null;
+    // Verification fields are now implicitly included by extending PaymentRecord
 } 

@@ -64,16 +64,17 @@
     *   `FR-TPKG-05`: Tour Package bookings should include relevant dates (e.g., booking date, travel start/end dates) and potentially a status (including Open, Negotiating, Paid (1st Installment), Paid (Full Payment), Complete, Closed).
     *   `FR-TPKG-06`: A dedicated section/page shall exist for managing Tour Package bookings.
     *   `FR-TPKG-07`: Each Tour Package booking must have a unique, system-generated or user-provided (if system generation isn't implemented) 5-character alphanumeric identifier (ID).
-    *   `FR-TPKG-08`: When editing a Tour Package booking, if the status is changed to a payment-related status (e.g., `Paid (1st Installment)`, `Paid (Full Payment)`), a file input field shall appear, allowing the user to upload a corresponding payment slip image/document.
+    *   `FR-TPKG-08`: When editing a Tour Package booking, if the status is changed to a payment-related status (e.g., `Paid (1st Installment)`, `Paid (Full Payment)`) **and a payment record for that specific status does not already exist**, a file input field shall appear, allowing the user to upload a corresponding payment slip image/document.
     *   `FR-TPKG-09`: Uploaded payment slips shall be stored securely (e.g., using Supabase Storage).
     *   `FR-TPKG-10`: A separate `payments` table shall record payment events, linking to the `tour_package_bookings` table and storing the status at the time of payment, the path to the uploaded slip in storage, and the upload timestamp.
-    *   `FR-TPKG-11`: The Tour Package booking detail page shall include a "Payments" tab displaying a history of recorded payments for that booking.
-    *   `FR-TPKG-12`: Each payment record displayed shall include the upload date, the status associated with the payment, a link/button to view the slip, and a button to delete the payment record (which also deletes the file from storage).
-    *   `FR-TPKG-13`: The "Linked Booking Ref" dropdown on the edit form should only be visible when the status is not 'Open'.
+    *   `FR-TPKG-11`: When editing a Tour Package booking, if a payment record **already exists** for the selected payment-related status, a \"View Slip\" button shall be displayed instead of the file input field, allowing the user to view the previously uploaded slip.
+    *   `FR-TPKG-12`: The Tour Package booking detail page shall include a \"Payments\" tab displaying a history of recorded payments for that booking.
+    *   `FR-TPKG-13`: Each payment record displayed (on the detail page and the Payments Ledger) shall include the upload date, the status associated with the payment, a link/button to view the slip (using a secure, time-limited Signed URL), and a button to delete the payment record (which also deletes the file from storage).
+    *   `FR-TPKG-14`: The \"Linked Booking Ref\" dropdown on the edit form should only be visible when the status is not \'Open\'.
 *   **4.9 Payments Ledger:**
-    *   `FR-PAYL-01`: A dedicated page/section titled "Payments" shall be accessible via the main sidebar navigation.
+    *   `FR-PAYL-01`: A dedicated page/section titled \"Payments\" shall be accessible via the main sidebar navigation.
     *   `FR-PAYL-02`: This page shall display a ledger (table) of all payment records from the `payments` table.
-    *   `FR-PAYL-03`: The ledger shall display, at minimum: Upload Date, Customer Name (from the linked booking), Tour Booking ID (linked to the booking detail page), Package Name (from the linked tour product), Status at Payment, and an Action button to view the associated payment slip.
+    *   `FR-PAYL-03`: The ledger shall display, at minimum: Upload Date, Customer Name (from the linked booking), Tour Booking ID (linked to the booking detail page), Package Name (from the linked tour product), Status at Payment, and an Action button area (containing View Slip and potentially Delete, although Delete might be restricted).
     *   `FR-PAYL-04`: Payment records shall be displayed in reverse chronological order (newest first) based on the upload date.
     *   `FR-PAYL-05`: The data required for the ledger (joining payments, bookings, and products) shall be fetched via a dedicated server action.
 
@@ -87,7 +88,8 @@
     *   `NFR-USAB-02`: The application must be responsive and function correctly on various screen sizes (mobile-first approach with Tailwind CSS).
     *   `NFR-USAB-03`: The main sidebar navigation shall visually separate standard booking management (`Fares`, `Customers`, `Bookings`, `Sectors`) from tour package management (`Tour Packages`, `Tour Products`) using a distinct separator (e.g., a horizontal line).
     *   `NFR-USAB-04`: The main sidebar shall include an easily accessible logout button, allowing users to securely end their session.
-    *   `NFR-USAB-05`: The main sidebar navigation shall include a link to the dedicated "Payments" ledger page.
+    *   `NFR-USAB-05`: The main sidebar navigation shall include a link to the dedicated \"Payments\" ledger page.
+    *   `NFR-USAB-06`: After successfully updating a Tour Package booking via the edit form, the user shall be redirected back to the Tour Package listing page.
 *   **5.3 Reliability:**
     *   `NFR-RELI-01`: The application should handle errors gracefully (e.g., display informative messages if data fetching fails). Next.js `error.tsx` conventions should be used.
     *   `NFR-RELI-02`: Loading states should be indicated clearly to the user while data is being fetched (Next.js `loading.tsx`).

@@ -6,6 +6,8 @@ import { TourPackageBookingSchema, type TourPackageBooking, type TourProduct, ty
 import { revalidatePath } from 'next/cache';
 import crypto from 'crypto'; // Import crypto for random bytes
 import { z } from 'zod';
+import { Mistral } from '@mistralai/mistralai'; // <-- Import Mistral
+import path from 'path'; // Import path for getting extension
 // import { toast } from 'react-hot-toast'; // <-- REMOVE: Cannot use client-side toast in server action
 
 // --- Helper Type for Action State ---
@@ -567,6 +569,13 @@ export async function getAllPaymentRecords(): Promise<PaymentLedgerItem[]> {
             status_at_payment,
             payment_slip_path,
             tour_package_booking_id,
+            is_verified,
+            verified_amount,
+            verified_payment_date,
+            verified_origin_bank,
+            verified_dest_bank,
+            verification_error,
+            verified_at,
             tour_package_bookings!fk_tour_package_booking (
                 customer_name,
                 tour_products (
@@ -590,7 +599,212 @@ export async function getAllPaymentRecords(): Promise<PaymentLedgerItem[]> {
         tour_package_booking_id: item.tour_package_booking_id,
         customer_name: item.tour_package_bookings?.customer_name ?? null,
         package_name: item.tour_package_bookings?.tour_products?.name ?? null,
+        is_verified: item.is_verified,
+        verified_amount: item.verified_amount,
+        verified_payment_date: item.verified_payment_date,
+        verified_origin_bank: item.verified_origin_bank,
+        verified_dest_bank: item.verified_dest_bank,
+        verification_error: item.verification_error,
+        verified_at: item.verified_at,
     }));
 
     return ledgerData;
+}
+
+// --- Helper to get Mime Type from Extension ---
+const getMimeType = (filePath: string): string | null => {
+    const ext = path.extname(filePath).toLowerCase();
+    switch (ext) {
+        case '.png': return 'image/png';
+        case '.jpg':
+        case '.jpeg': return 'image/jpeg';
+        case '.webp': return 'image/webp';
+        case '.gif': return 'image/gif'; // Assuming non-animated
+        default: return null; // Or a default like 'application/octet-stream'
+    }
+};
+
+// --- VERIFY PAYMENT SLIP (using Mistral Chat with Base64) ---
+
+// Helper function to parse the expected JSON structure from Mistral
+const OcrResultSchema = z.object({
+    payment_amount: z.number().positive().optional().nullable(),
+    // Use RegExp object directly for validation
+    payment_date: z.string().regex(new RegExp('^\\d{4}-\\d{2}-\\d{2}$'), "Expected YYYY-MM-DD format").optional().nullable(), 
+    origin_bank: z.string().optional().nullable(),
+    destination_bank: z.string().optional().nullable()
+}).passthrough();
+
+type OcrResult = z.infer<typeof OcrResultSchema>;
+
+export async function verifyPaymentSlip(
+    paymentId: string
+): Promise<{ success: boolean; message: string; verificationData?: OcrResult }> {
+    if (!paymentId) {
+        return { success: false, message: "Error: Missing payment ID for verification." };
+    }
+
+    console.log(`[verifyPaymentSlip] Starting verification for payment ID: ${paymentId}`);
+
+    const supabaseAdmin = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!,
+        { auth: { autoRefreshToken: false, persistSession: false } }
+    );
+
+    let paymentRecord: PaymentRecord | null = null;
+    let slipPath: string | null = null;
+
+    try {
+        // 1. Fetch Payment Record
+        const { data, error } = await supabaseAdmin
+            .from('payments')
+            .select('*')
+            .eq('id', paymentId)
+            .single();
+        
+        if (error || !data) {
+            console.error('[verifyPaymentSlip] Fetch Payment Error:', error);
+            throw new Error(`Could not find payment record ${paymentId}.`);
+        }
+        paymentRecord = data as PaymentRecord;
+        slipPath = paymentRecord.payment_slip_path;
+        console.log(`[verifyPaymentSlip] Found payment record, slip path: ${slipPath}`);
+
+        if (!slipPath) {
+             throw new Error("Payment record is missing the slip path.");
+        }
+
+        // 2. Download Image from Storage and Encode to Base64
+        console.log(`[verifyPaymentSlip] Downloading slip from storage: ${slipPath}`);
+        const { data: blobData, error: downloadError } = await supabaseAdmin.storage
+            .from('payment-slips')
+            .download(slipPath);
+
+        if (downloadError || !blobData) {
+            console.error('[verifyPaymentSlip] Download Slip Error:', downloadError);
+            throw new Error(`Failed to download payment slip from storage. ${downloadError?.message ?? ''}`);
+        }
+
+        const mimeType = getMimeType(slipPath);
+        if (!mimeType) {
+            throw new Error(`Could not determine mime type for file: ${slipPath}`);
+        }
+        console.log(`[verifyPaymentSlip] Determined mime type: ${mimeType}`);
+
+        const buffer = Buffer.from(await blobData.arrayBuffer());
+        const base64Image = buffer.toString('base64');
+        const dataUri = `data:${mimeType};base64,${base64Image}`;
+        console.log(`[verifyPaymentSlip] Generated Base64 Data URI (length: ${dataUri.length})`);
+
+        // 3. Call Mistral Chat API (using Base64)
+        const mistralApiKey = process.env.MISTRAL_API_KEY;
+        if (!mistralApiKey) {
+            throw new Error("Mistral API Key not configured in environment variables.");
+        }
+        const mistralClient = new Mistral({ apiKey: mistralApiKey });
+
+        const promptText = 'Analyze the provided payment slip image. Extract the following information and return it ONLY as a valid JSON object with keys \"payment_amount\" (numeric), \"payment_date\" (string, YYYY-MM-DD format), \"origin_bank\" (string), and \"destination_bank\" (string). If a value cannot be found, set the corresponding JSON key to null. Do not include any explanations or surrounding text, only the JSON object.';
+
+        console.log("[verifyPaymentSlip] Preparing to call Mistral Chat API...");
+        let chatResponse;
+        try {
+            chatResponse = await mistralClient.chat.complete({
+                model: "mistral-small-latest", // Vision capable model
+                responseFormat: { type: "json_object" }, 
+                messages: [
+                    {
+                        role: "user",
+                        content: [
+                            { type: "text", text: promptText },
+                            {
+                                type: "image_url",
+                                imageUrl: dataUri 
+                            }
+                        ]
+                    }
+                ],
+            });
+            console.log("[verifyPaymentSlip] Mistral API call successful.");
+        } catch (apiError: any) {
+            console.error("[verifyPaymentSlip] Mistral API call failed:", apiError);
+            throw new Error(`Mistral API Error: ${apiError.message}`); // Re-throw to be caught by outer catch
+        }
+
+        // Add check for choices array
+        if (!chatResponse || !chatResponse.choices || chatResponse.choices.length === 0) {
+            console.error("[verifyPaymentSlip] Mistral response missing choices array:", chatResponse);
+            throw new Error("Mistral returned no choices or an unexpected response structure.");
+        }
+
+        const rawContent = chatResponse.choices[0].message.content;
+        console.log("[verifyPaymentSlip] Raw Mistral response content:", JSON.stringify(rawContent, null, 2)); 
+        if (rawContent === null || rawContent === undefined) { // Check for null/undefined specifically
+             throw new Error("Mistral returned null or undefined content.");
+        }
+
+        // 4. Parse Mistral Response
+        console.log("[verifyPaymentSlip] Preparing to parse response...");
+        let parsedResult: OcrResult;
+        try {
+             // ... existing parsing and validation logic ...
+            if (typeof rawContent !== 'string') {
+                console.warn("[verifyPaymentSlip] Mistral content was not a string, attempting parse anyway. Type:", typeof rawContent);
+            }
+            const jsonContent = typeof rawContent === 'string' ? JSON.parse(rawContent) : rawContent; 
+            
+            const validation = OcrResultSchema.safeParse(jsonContent);
+            if (!validation.success) {
+                console.error("[verifyPaymentSlip] Zod Validation Error:", validation.error.flatten());
+                throw new Error(`Mistral response JSON structure is invalid: ${validation.error.message}`);
+            }
+            parsedResult = validation.data;
+            console.log("[verifyPaymentSlip] Parsed OCR Result:", parsedResult); 
+        } catch (parseError: any) {
+            console.error("[verifyPaymentSlip] Failed to parse or validate Mistral JSON response:", parseError);
+            // Add the raw content to the error message for context
+            throw new Error(`Failed to process OCR response: ${parseError.message}. Raw content was: ${JSON.stringify(rawContent)}`);
+        }
+
+        // 5. Update Payment Record in DB
+        console.log("[verifyPaymentSlip] Preparing to update database...");
+        const { error: updateError } = await supabaseAdmin
+            .from('payments')
+            .update({
+                is_verified: true,
+                verified_amount: parsedResult.payment_amount,
+                verified_payment_date: parsedResult.payment_date ? new Date(parsedResult.payment_date + 'T00:00:00') : null, 
+                verified_origin_bank: parsedResult.origin_bank,
+                verified_dest_bank: parsedResult.destination_bank,
+                verification_error: null,
+                verified_at: new Date().toISOString()
+            })
+            .eq('id', paymentId);
+
+        if (updateError) {
+            console.error('[verifyPaymentSlip] Update Payment Error:', updateError);
+            throw new Error(`Failed to update payment record after verification. ${updateError.message}`);
+        }
+
+        console.log(`[verifyPaymentSlip] Successfully verified and updated payment ID: ${paymentId}`);
+        revalidatePath('/payments'); 
+        revalidatePath(`/tour-packages/${paymentRecord.tour_package_booking_id}`); 
+        return { success: true, message: "Payment verified successfully.", verificationData: parsedResult };
+
+    } catch (error: any) {
+        // Log the error caught by the main try...catch block
+        console.error(`[verifyPaymentSlip] Overall verification failed for ${paymentId}. Error:`, error); 
+        // Attempt to store the error message in the database
+        if (paymentId) { 
+            await supabaseAdmin
+                .from('payments')
+                .update({ 
+                    is_verified: false, 
+                    verification_error: error.message 
+                })
+                .eq('id', paymentId)
+                .maybeSingle(); 
+        }
+        return { success: false, message: error.message || "An unexpected error occurred during verification." };
+    }
 } 

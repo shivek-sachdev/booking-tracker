@@ -2,7 +2,7 @@ import { type TourPackageBookingWithProduct, type PaymentRecord, type TourPackag
 import { getTourPackageBookingById, getPaymentsForBooking } from "@/lib/actions/tour-package-bookings";
 import { notFound } from 'next/navigation';
 import Link from "next/link";
-import { ArrowLeft, Edit, Eye, Trash2 } from "lucide-react";
+import { ArrowLeft, Edit, Eye, Trash2, CheckCircle, AlertCircle, CircleDollarSign, CalendarDays, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -16,37 +16,16 @@ import {
     TableHeader, 
     TableRow 
 } from "@/components/ui/table";
-import { createClient } from '@/lib/supabase/client';
-import { PaymentActions } from '../components/payment-actions';
+import { PaymentActions } from '@/components/tour-packages/payment-actions';
+import { 
+    formatDate, 
+    formatTimestamp, 
+    formatCurrency, 
+    getStatusVariant,
+    openStatusBadgeClass
+} from '@/lib/utils/formatting';
 
 // Reusable helper functions (consider moving to a shared utils file)
-const formatDate = (dateString: string | null | undefined): string => {
-  if (!dateString) return '-';
-  try {
-    // Directly parse the timestamp string
-    const date = new Date(dateString);
-    // Check if the date is valid after parsing
-    if (isNaN(date.getTime())) {
-        return 'Invalid Date';
-    }
-    // Format including time, but omit timezone name
-    return date.toLocaleString('en-US', { 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric', 
-        hour: 'numeric', 
-        minute: '2-digit' 
-    });
-  } catch {
-    return 'Invalid Date';
-  }
-};
-
-const formatCurrency = (amount: number | null | undefined): string => {
-  if (amount === null || amount === undefined) return '-';
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
-};
-
 const formatTravelPeriod = (startDateStr: string | null | undefined, endDateStr: string | null | undefined): string => {
   if (!startDateStr) return '-';
   try {
@@ -68,19 +47,6 @@ const formatTravelPeriod = (startDateStr: string | null | undefined, endDateStr:
     return 'Invalid Dates';
   }
 };
-
-const getStatusVariant = (status: TourPackageStatus): "default" | "secondary" | "destructive" | "outline" => {
-   switch (status) {
-     case 'Complete': case 'Paid (Full Payment)': return 'default'; 
-     case 'Paid (1st installment)': return 'secondary'; 
-     case 'Open': case 'Negotiating': return 'outline'; // Keep outline for Open/Negotiating
-     case 'Closed': return 'destructive'; 
-     default: return 'secondary'; 
-   }
- };
-
- // Style specifically for 'Open' status badge
- const openStatusBadgeClass = "border-yellow-400 bg-yellow-50 text-yellow-700";
 
 // Apply the workaround: define props interface with params as Promise
 interface TourPackageDetailPageProps {
@@ -203,7 +169,7 @@ export default async function TourPackageDetailPage({ params }: TourPackageDetai
           </Card>
         </TabsContent>
 
-        {/* Payments Tab Content */}
+        {/* Updated Payments Tab Content */}
         <TabsContent value="payments">
           <Card>
             <CardHeader>
@@ -217,18 +183,53 @@ export default async function TourPackageDetailPage({ params }: TourPackageDetai
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Uploaded Date</TableHead>
-                      <TableHead>Status at Payment</TableHead>
-                      <TableHead>Actions</TableHead>
+                      {/* Mirror structure from ledger page */}
+                      <TableHead className="w-[25%]">Uploaded Date</TableHead>
+                      <TableHead className="w-[25%]">Status at Payment</TableHead>
+                      <TableHead className="w-[25%]">Verification Status</TableHead> 
+                      <TableHead className="w-[25%] text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {payments.map((payment) => (
                       <TableRow key={payment.id}>
-                        <TableCell>{formatDate(payment.uploaded_at)}</TableCell>
-                        <TableCell>{payment.status_at_payment}</TableCell>
+                        {/* Use formatTimestamp for uploaded_at */}
+                        <TableCell>{formatTimestamp(payment.uploaded_at)}</TableCell>
+                        {/* Use Badge with getStatusVariant */}
+                        <TableCell><Badge variant={getStatusVariant(payment.status_at_payment)}>{payment.status_at_payment}</Badge></TableCell>
+                        
+                        {/* Verification Status Cell - Copied logic from ledger */}
                         <TableCell>
-                          <PaymentActions paymentId={payment.id} slipPath={payment.payment_slip_path} />
+                          {payment.is_verified ? (
+                            <div className="flex flex-col text-xs" title="Payment slip verified successfully">
+                              <div className="flex items-center text-green-600"><CheckCircle className="mr-1 h-3 w-3 flex-shrink-0" /> Verified</div>
+                              {payment.verified_amount && (
+                                  <div className="flex items-center text-muted-foreground"><CircleDollarSign className="mr-1 h-3 w-3 flex-shrink-0" /> {formatCurrency(payment.verified_amount)}</div>
+                              )}
+                              {payment.verified_payment_date && (
+                                  <div className="flex items-center text-muted-foreground">
+                                    <CalendarDays className="mr-1 h-3 w-3 flex-shrink-0" /> 
+                                    Paid on: {formatDate(payment.verified_payment_date)}
+                                  </div>
+                              )}
+                              {payment.verified_at && (
+                                  <div className="flex items-center text-muted-foreground mt-1">
+                                    <Clock className="mr-1 h-3 w-3 flex-shrink-0" /> 
+                                    Verified on: {formatTimestamp(payment.verified_at)}
+                                  </div>
+                              )}
+                            </div>
+                          ) : payment.verification_error ? (
+                            <div className="flex items-center text-xs text-red-500" title={`Error: ${payment.verification_error}`}>
+                              <AlertCircle className="mr-1 h-3 w-3 flex-shrink-0" /> Failed
+                            </div>
+                          ) : (
+                            <div className="text-xs text-muted-foreground italic">Pending</div>
+                          )}
+                        </TableCell>
+
+                        <TableCell className="text-right">
+                          <PaymentActions payment={payment} />
                         </TableCell>
                       </TableRow>
                     ))}
