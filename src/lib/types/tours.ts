@@ -24,7 +24,7 @@ export interface TourPackageBooking {
   id: string;
   tour_product_id: string;
   customer_name: string;
-  price?: number | null;
+  base_price_per_pax?: number | null;
   booking_date?: string | null; // Assuming date only
   travel_start_date?: string | null; // Assuming date only
   travel_end_date?: string | null; // Assuming date only
@@ -35,6 +35,9 @@ export interface TourPackageBooking {
   created_at: string;
   updated_at: string;
   pax: number;
+  addons?: Array<{ id: string; name: string; amount: number }> | null;
+  total_per_pax?: number | null;
+  grand_total?: number | null;
   // Optional: Add joined tour product data if needed frequently
   // tour_products?: Pick<TourProduct, 'name'> | null; 
 }
@@ -53,7 +56,7 @@ const TourPackageBookingBaseSchema = z.object({
   id: z.string().length(5, { message: "ID must be 5 characters long" }).regex(/^[a-zA-Z0-9]+$/, { message: "ID must be alphanumeric" }).optional(),
   tour_product_id: z.string().uuid({ message: 'Please select a valid tour product.' }),
   customer_name: z.string().min(2, { message: 'Customer name is required.' }),
-  price: z.coerce.number().positive({ message: 'Price must be a positive number.' }).optional().nullable(), // Use coerce for FormData string conversion
+  base_price_per_pax: z.coerce.number().positive({ message: 'Base Price must be a positive number.' }).optional().nullable(),
   pax: z.coerce.number().int().positive({ message: 'PAX must be a positive number.' }).optional().nullable(),
   booking_date: z.coerce.date().optional().nullable(),
   travel_start_date: z.coerce.date().optional().nullable(),
@@ -85,7 +88,7 @@ export const TourPackageBookingSchema = z.object({
     id: z.string().length(5, { message: "ID must be 5 characters long" }).regex(/^[a-zA-Z0-9]+$/, { message: "ID must be alphanumeric" }).optional(),
     customer_name: z.string().min(1, { message: 'Customer name is required.' }),
     tour_product_id: z.string().uuid({ message: 'Please select a valid tour package.' }),
-    price: z.coerce.number().positive('Price must be a positive number.').optional().nullable(),
+    base_price_per_pax: z.coerce.number().positive('Base Price must be a positive number.').optional().nullable(),
     pax: z.coerce.number().int().positive('PAX must be a positive number.'),
     status: TourPackageStatusEnum,
     booking_date: z.date().optional().nullable(),
@@ -93,10 +96,15 @@ export const TourPackageBookingSchema = z.object({
     travel_end_date: z.date().optional().nullable(),
     notes: z.string().optional().nullable(),
     linked_booking_id: z.string().uuid().optional().nullable(),
-    created_at: z.string().datetime().optional(), // Keep for type inference if needed
-    updated_at: z.string().datetime().optional(), // Keep for type inference if needed
+    addons: z.array(z.object({
+        id: z.string().min(1),
+        name: z.string().min(1, 'Add-on name is required.'),
+        amount: z.coerce.number().positive('Add-on amount must be positive.')
+    })),
+    created_at: z.string().datetime().optional(),
+    updated_at: z.string().datetime().optional(),
 })
-.omit({ id: true, created_at: true, updated_at: true }) // Omit fields not needed for create/update forms before refinement
+.omit({ id: true, created_at: true, updated_at: true })
 .refine(data => {
     // Ensure end date is after start date if both are provided
     if (data.travel_start_date && data.travel_end_date) {
@@ -105,7 +113,7 @@ export const TourPackageBookingSchema = z.object({
     return true;
   }, {
     message: "Travel end date must be on or after the start date.",
-    path: ["travel_end_date"], // Point error to the end date field
+    path: ["travel_end_date"],
   });
 
 // Simplified types for form state or specific use cases
@@ -119,16 +127,18 @@ export interface TourProduct extends Omit<z.infer<typeof TourProductSchema>, 'de
 }
 
 // TypeScript interface for Tour Package Booking
-export interface TourPackageBooking extends Omit<z.infer<typeof TourPackageBookingSchema>, 'booking_date' | 'travel_start_date' | 'travel_end_date' | 'notes' | 'price' | 'id'> {
+export interface TourPackageBooking extends Omit<z.infer<typeof TourPackageBookingSchema>, 'booking_date' | 'travel_start_date' | 'travel_end_date' | 'notes' | 'base_price_per_pax' | 'id' | 'addons'> {
     id: string;
-    // Represent dates as strings, matching potential DB representation or making them optional
     booking_date?: string | null;
     travel_start_date?: string | null;
     travel_end_date?: string | null;
-    notes?: string | null; // Explicitly allow null
-    price?: number | null; // Explicitly allow null for price
+    notes?: string | null;
+    base_price_per_pax?: number | null;
+    addons?: Array<{ id: string; name: string; amount: number }> | null;
     pax: number;
     linked_booking_id?: string | null;
+    total_per_pax?: number | null;
+    grand_total?: number | null;
 }
 
 // Interface for booking joined with product name

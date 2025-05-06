@@ -13,10 +13,11 @@ import path from 'path'; // Import path for getting extension
 // --- Helper Type for Action State ---
 interface FormState {
   message: string;
-  bookingId?: string; // <-- Add optional bookingId
+  bookingId?: string; // Include bookingId for create success
   errors?: Record<string, string[]>;
-  fieldValues?: {
-      [key: string]: string | number | null | undefined;
+  fieldValues?: { 
+      // Keep string values for re-populating form
+      [key: string]: string | undefined;
   };
 }
 
@@ -41,88 +42,103 @@ export async function createTourPackageBooking(
   // 1. Prepare data for validation
   const rawFormData = Object.fromEntries(formData.entries());
   
+  // Extract and parse addons JSON
+  const addonsString = rawFormData.addons as string || '[]';
+  let parsedAddons: Array<{ id: string; name: string; amount: number }> = [];
+  try {
+    parsedAddons = JSON.parse(addonsString);
+    if (!Array.isArray(parsedAddons)) throw new Error("Addons is not an array");
+    // Further validation can be done via Zod
+  } catch (e) {
+      console.error("Failed to parse addons JSON:", e);
+      return {
+          message: 'Invalid format for additional costs data.',
+          errors: { addons: ['Invalid add-ons data submitted.'] }
+      };
+  }
+  
   // Separate linked_booking_id and convert empty string to null
-  const { linked_booking_id: rawLinkedId, ...otherRawData } = rawFormData;
+  const { 
+      linked_booking_id: rawLinkedId, 
+      addons: rawAddons, // Exclude raw addons string
+      base_price_per_pax: rawBasePrice, // Handle base price coercion
+      pax: rawPax, // Handle pax coercion
+      ...otherRawData 
+  } = rawFormData;
+
   const processedLinkedId = rawLinkedId === '' ? null : rawLinkedId as string | null;
   
+  // Prepare object for Zod validation
   const formDataForValidation = {
-      ...otherRawData, // Spread the rest of the raw data
-      linked_booking_id: processedLinkedId, // Add the processed value back
-      // Coerce dates
+      ...otherRawData, 
+      linked_booking_id: processedLinkedId, 
+      // Add parsed addons
+      addons: parsedAddons, 
+      // Coerce numbers and dates
+      base_price_per_pax: rawBasePrice === null || rawBasePrice === undefined || rawBasePrice === '' ? null : Number(rawBasePrice),
+      pax: rawPax === null || rawPax === undefined || rawPax === '' ? null : Number(rawPax),
       booking_date: otherRawData.booking_date ? new Date(otherRawData.booking_date as string) : null,
       travel_start_date: otherRawData.travel_start_date ? new Date(otherRawData.travel_start_date as string) : null,
       travel_end_date: otherRawData.travel_end_date ? new Date(otherRawData.travel_end_date as string) : null,
   };
 
-  // Validate using the schema that expects optional/nullable UUID
   const validatedFields = TourPackageBookingSchema.safeParse(formDataForValidation);
 
   if (!validatedFields.success) {
     console.error('Validation Error:', validatedFields.error.flatten().fieldErrors);
-    // Convert raw form data values to string for fieldValues
     const fieldValuesWithString = Object.fromEntries(
         Object.entries(rawFormData).map(([key, value]) => [key, String(value ?? '')])
     );
     return {
       message: 'Validation failed. Please check the fields.',
       errors: validatedFields.error.flatten().fieldErrors,
-      fieldValues: fieldValuesWithString, // Use the stringified values
+      fieldValues: fieldValuesWithString,
     };
   }
 
-  // Destructure validated data (including the new field)
+  // Destructure validated data (including base_price_per_pax and addons)
   const { 
-    customer_name, tour_product_id, price, pax, status, 
+    customer_name, tour_product_id, base_price_per_pax, addons, pax, status, 
     booking_date, travel_start_date, travel_end_date, notes, 
-    linked_booking_id // <-- Destructure new field
+    linked_booking_id
   } = validatedFields.data;
+
+  // --- Server-side Calculation --- 
+  const addonsTotal = addons.reduce((sum, item) => sum + item.amount, 0);
+  const totalPerPax = (base_price_per_pax ?? 0) + addonsTotal;
+  const grandTotal = totalPerPax * pax; 
+  // --- End Calculation ---
 
   // 2. Generate Unique 5-Character Alphanumeric ID
   let uniqueId = '';
   let attempts = 0;
-  const maxAttempts = 5; // Prevent infinite loops in unlikely collision scenarios
-
-  while (!uniqueId && attempts < maxAttempts) {
-    attempts++;
-    const potentialId = generateAlphanumericId(5);
-    
-    // Check if ID already exists (simple check)
-    const { data: existing, error: checkError } = await supabase
-      .from('tour_package_bookings')
-      .select('id')
-      .eq('id', potentialId)
-      .maybeSingle(); // Use maybeSingle to handle 0 or 1 result
-
-    if (checkError) {
-      console.error('Supabase ID Check Error:', checkError);
-      // Decide how to handle: retry, fail, log? For now, we'll let it try again.
-    }
-
-    if (!existing && !checkError) {
-      uniqueId = potentialId; // Found a unique ID
-    } else if (existing) {
-       console.warn(`ID collision detected for ${potentialId}, attempt ${attempts}. Regenerating...`);
-    }
+  const maxAttempts = 5;
+  while (!uniqueId && attempts < maxAttempts) { 
+      attempts++;
+      const potentialId = generateAlphanumericId(5);
+      const { data: existing, error: checkError } = await supabase.from('tour_package_bookings').select('id').eq('id', potentialId).maybeSingle();
+      if (checkError) console.error('Supabase ID Check Error:', checkError);
+      if (!existing && !checkError) uniqueId = potentialId;
+      else if (existing) console.warn(`ID collision detected for ${potentialId}, attempt ${attempts}. Regenerating...`);
   }
+  if (!uniqueId) return { message: 'Database Error: Could not generate a unique booking ID. Please try again.' };
 
-  if (!uniqueId) {
-    console.error(`Failed to generate a unique ID after ${maxAttempts} attempts.`);
-    return { message: 'Database Error: Could not generate a unique booking ID. Please try again.' };
-  }
-
-  // 3. Prepare data for Supabase (including generated ID and potentially null linked ID)
+  // 3. Prepare data for Supabase (including calculated totals and addons)
   const dataToInsert = {
       id: uniqueId,
       customer_name,
       tour_product_id,
-      price,
+      base_price_per_pax: base_price_per_pax ?? 0, // Default null base price to 0
       pax,
       status,
+      addons, // Pass the parsed addons array
+      total_per_pax: totalPerPax,
+      grand_total: grandTotal,
       booking_date: booking_date?.toISOString(),
       travel_start_date: travel_start_date?.toISOString(),
       travel_end_date: travel_end_date?.toISOString(),
       notes,
-      linked_booking_id: linked_booking_id, // Use validated data
+      linked_booking_id,
   };
 
   // 4. Insert data into Supabase
@@ -130,14 +146,11 @@ export async function createTourPackageBooking(
     console.log('Attempting to insert tour booking:', dataToInsert);
     const { error } = await supabase
       .from('tour_package_bookings')
-      .insert([dataToInsert]); // No .select() needed now
+      .insert(dataToInsert); // Use insert with single object
 
     if (error) {
       console.error('Supabase Insert Error:', error);
-      // Check for potential duplicate key error if the uniqueness check somehow failed
-      if (error.code === '23505') { // Unique violation
-          return { message: `Database Error: Failed to create booking. The generated ID ${uniqueId} might already exist unexpectedly.` };
-      }
+      if (error.code === '23505') return { message: `Database Error: Failed to create booking. The generated ID ${uniqueId} might already exist unexpectedly.` };
       return { message: `Database Error: Failed to create tour booking. ${error.message}` };
     }
 
@@ -150,7 +163,8 @@ export async function createTourPackageBooking(
 
   // 5. Revalidate cache and return success
   revalidatePath('/tour-packages');
-  return { message: `Successfully created tour booking ${uniqueId}!` };
+  // Pass back the new bookingId
+  return { message: `Successfully created tour booking ${uniqueId}!`, bookingId: uniqueId }; 
 }
 
 // --- UPDATE ---
@@ -165,32 +179,53 @@ export async function updateTourPackageBooking(
 
   // 1. Prepare data for validation
   const rawFormData = Object.fromEntries(formData.entries());
-  
-  const { linked_booking_id: rawLinkedId, ...otherRawData } = rawFormData;
+
+  // Extract and parse addons JSON
+  const addonsString = rawFormData.addons as string || '[]';
+  let parsedAddons: Array<{ id: string; name: string; amount: number }> = [];
+  try {
+    parsedAddons = JSON.parse(addonsString);
+    if (!Array.isArray(parsedAddons)) throw new Error("Addons is not an array");
+  } catch (e) {
+      console.error("Failed to parse addons JSON:", e);
+      return {
+          message: 'Invalid format for additional costs data.',
+          errors: { addons: ['Invalid add-ons data submitted.'] }
+      };
+  }
+
+  const { 
+      linked_booking_id: rawLinkedId, 
+      addons: rawAddons, // Exclude raw addons string
+      base_price_per_pax: rawBasePrice,
+      pax: rawPax,
+      ...otherRawData 
+  } = rawFormData;
+
   const processedLinkedId = rawLinkedId === '' ? null : rawLinkedId as string | null;
   
   const formDataForValidation = {
       ...otherRawData,
       linked_booking_id: processedLinkedId,
-      // Coerce dates
+      addons: parsedAddons,
+      base_price_per_pax: rawBasePrice === null || rawBasePrice === undefined || rawBasePrice === '' ? null : Number(rawBasePrice),
+      pax: rawPax === null || rawPax === undefined || rawPax === '' ? null : Number(rawPax),
       booking_date: otherRawData.booking_date ? new Date(otherRawData.booking_date as string) : null,
       travel_start_date: otherRawData.travel_start_date ? new Date(otherRawData.travel_start_date as string) : null,
       travel_end_date: otherRawData.travel_end_date ? new Date(otherRawData.travel_end_date as string) : null,
   };
   
-  // Validate using the schema (which no longer includes payment_slip_path)
   const validatedFields = TourPackageBookingSchema.safeParse(formDataForValidation);
 
   if (!validatedFields.success) {
     console.error('Validation Error:', validatedFields.error.flatten().fieldErrors);
-    // Convert raw form data values to string for fieldValues
     const fieldValuesWithString = Object.fromEntries(
         Object.entries(rawFormData).map(([key, value]) => [key, String(value ?? '')])
     );
     return {
       message: 'Validation failed. Please check the fields.',
       errors: validatedFields.error.flatten().fieldErrors,
-      fieldValues: fieldValuesWithString, // Use the stringified values
+      fieldValues: fieldValuesWithString,
     };
   }
 
@@ -198,8 +233,9 @@ export async function updateTourPackageBooking(
   const { 
       customer_name, 
       tour_product_id, 
-      price, 
-      pax, // Get PAX
+      base_price_per_pax, 
+      addons, 
+      pax, 
       status, 
       booking_date, 
       travel_start_date, 
@@ -208,18 +244,27 @@ export async function updateTourPackageBooking(
       linked_booking_id
   } = validatedFields.data;
 
+  // --- Server-side Calculation --- 
+  const addonsTotal = addons.reduce((sum, item) => sum + item.amount, 0);
+  const totalPerPax = (base_price_per_pax ?? 0) + addonsTotal;
+  const grandTotal = totalPerPax * pax;
+  // --- End Calculation ---
+
   // 2. Prepare data for Supabase update
   const dataToUpdate = {
       customer_name,
       tour_product_id,
-      price,
-      pax, // Include PAX
+      base_price_per_pax: base_price_per_pax ?? 0,
+      pax,
       status,
+      addons,
+      total_per_pax: totalPerPax,
+      grand_total: grandTotal,
       booking_date: booking_date?.toISOString(),
       travel_start_date: travel_start_date?.toISOString(),
       travel_end_date: travel_end_date?.toISOString(),
       notes,
-      linked_booking_id: linked_booking_id,
+      linked_booking_id,
       updated_at: new Date().toISOString(),
   };
 
@@ -443,13 +488,18 @@ export interface TourPackageBookingWithProduct extends TourPackageBooking {
 }
 */
 
-// Ensure the select includes the new field and explicitly lists others
+// Ensure the select includes the new fields and removes the old 'price'
 export async function getTourPackageBookings(): Promise<TourPackageBookingWithProduct[]> {
   const supabase = createSimpleServerClient();
   const { data, error } = await supabase
     .from('tour_package_bookings')
     .select(`
-      id, customer_name, tour_product_id, price, pax, status, booking_date, travel_start_date, travel_end_date, notes, created_at, updated_at, 
+      id, customer_name, tour_product_id, 
+      base_price_per_pax, 
+      addons, 
+      total_per_pax, 
+      grand_total, 
+      pax, status, booking_date, travel_start_date, travel_end_date, notes, created_at, updated_at, 
       linked_booking_id,
       tour_products ( name )
     `)
@@ -460,20 +510,24 @@ export async function getTourPackageBookings(): Promise<TourPackageBookingWithPr
     console.error('Database Error fetching tour package bookings:', error);
     return [];
   }
-  console.log("Raw data from getTourPackageBookings:", JSON.stringify(data, null, 2));
   
   // Use safer type assertion
   return (data as unknown as TourPackageBookingWithProduct[]) || [];
 }
 
-// Ensure the select includes the new field and explicitly lists others
+// Ensure the select includes the new fields and removes the old 'price'
 export async function getTourPackageBookingById(id: string): Promise<TourPackageBookingWithProduct | null> {
   if (!id) return null;
   const supabase = createSimpleServerClient();
   const { data, error } = await supabase
     .from('tour_package_bookings')
     .select(`
-      id, customer_name, tour_product_id, price, pax, status, booking_date, travel_start_date, travel_end_date, notes, created_at, updated_at, 
+      id, customer_name, tour_product_id, 
+      base_price_per_pax, 
+      addons, 
+      total_per_pax, 
+      grand_total, 
+      pax, status, booking_date, travel_start_date, travel_end_date, notes, created_at, updated_at, 
       linked_booking_id,
       tour_products ( name )
     `)
@@ -487,8 +541,7 @@ export async function getTourPackageBookingById(id: string): Promise<TourPackage
      }
     return null;
   }
-  console.log(`[getTourPackageBookingById] Raw data for ${id}:`, JSON.stringify(data, null, 2));
-
+  
   // Use safer type assertion
   return (data as unknown as TourPackageBookingWithProduct) || null;
 }

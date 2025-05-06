@@ -153,15 +153,28 @@ export default async function TourPackageDetailPage({ params }: TourPackageDetai
                  </div>
                  {/* Right Column */}
                  <div>
-                     <DetailItem label="Price per PAX" value={formatCurrency(booking.price)} />
+                     <DetailItem label="Base Price per PAX" value={formatCurrency(booking.base_price_per_pax)} />
                      <DetailItem label="PAX" value={booking.pax} />
+                     <DetailItem label="Total per Person" value={formatCurrency(booking.total_per_pax)} />
+                     <DetailItem label="Grand Total" value={formatCurrency(booking.grand_total)} />
                      <DetailItem label="Travel Period" value={formatTravelPeriod(booking.travel_start_date, booking.travel_end_date)} />
-                     {booking.price && booking.pax && (
-                         <DetailItem label="Calculated Total" value={formatCurrency(booking.price * booking.pax)} />
-                     )}
                  </div>
+                 {/* Addons Section (Full Width if it exists, or below notes) */}
+                 {booking.addons && Array.isArray(booking.addons) && booking.addons.length > 0 && (
+                    <div className="md:col-span-2 mt-4 pt-4 border-t">
+                        <h3 className="text-md font-semibold mb-2 text-muted-foreground">Additional Costs:</h3>
+                        <ul className="list-disc pl-5 space-y-1 text-sm">
+                            {booking.addons.map((addon) => (
+                                <li key={addon.id} className="flex justify-between">
+                                    <span>{addon.name}</span>
+                                    <span>{formatCurrency(addon.amount)}</span>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                 )}
                  {/* Notes Section (Full Width) */}
-                 <div className="md:col-span-2">
+                 <div className="md:col-span-2 mt-4 pt-4 border-t">
                      <DetailItem label="Notes" value={booking.notes || <span className="italic text-muted-foreground">No notes</span>} />
                  </div>
               </div>

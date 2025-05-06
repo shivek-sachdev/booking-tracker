@@ -51,7 +51,7 @@ const formatDate = (dateString: string | null | undefined): string => {
 
 const formatCurrency = (amount: number | null | undefined): string => {
   if (amount === null || amount === undefined) return '-';
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
+  return new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB' }).format(amount);
 };
 
 // Format travel period concisely
@@ -208,7 +208,7 @@ export function TourPackageBookingsTable({ data }: TourPackageBookingsTableProps
     'Booking ID',
     'Customer', 
     'Package',
-    'Price', 
+    'Total', 
     'PAX',
     'Booking Date', 
     'Travel Period',
@@ -235,7 +235,7 @@ export function TourPackageBookingsTable({ data }: TourPackageBookingsTableProps
             {data?.length ? (
               data.map((booking) => {
                 // Log the booking object as received by the table component
-                console.log("Booking object in table:", booking);
+                // console.log("Booking object in table:", booking);
                 return (
                   <TableRow 
                     key={booking.id}
@@ -249,25 +249,16 @@ export function TourPackageBookingsTable({ data }: TourPackageBookingsTableProps
                     <TableCell className="text-sm text-muted-foreground">
                       {booking.tour_products?.name || 'N/A'}
                     </TableCell>
-                    <TableCell>{formatCurrency(booking.price)}</TableCell>
-                    <TableCell>{booking.pax ?? '-'}</TableCell>
+                    <TableCell className="text-right font-medium">
+                       {formatCurrency(booking.grand_total)} 
+                    </TableCell>
+                    <TableCell className="text-center">{booking.pax}</TableCell>
                     <TableCell>{formatDate(booking.booking_date)}</TableCell>
                     <TableCell>{formatTravelPeriod(booking.travel_start_date, booking.travel_end_date)}</TableCell>
                     <TableCell>
-                      {booking.status === 'Open' ? (
-                         <Badge 
-                            variant="outline"
-                            className="border-yellow-400 bg-yellow-50 text-yellow-700"
-                         >
-                            {booking.status}
-                         </Badge>
-                      ) : (
-                         <Badge variant={getStatusVariant(booking.status)}>
-                            {booking.status}
-                         </Badge>
-                      )}
+                        <Badge variant={getStatusVariant(booking.status)}>{booking.status}</Badge>
                     </TableCell>
-                    <TableCell onClick={(e) => e.stopPropagation()}>
+                    <TableCell onClick={(e) => e.stopPropagation()} className="text-right">
                       <ActionsCell booking={booking} />
                     </TableCell>
                   </TableRow>
@@ -276,7 +267,7 @@ export function TourPackageBookingsTable({ data }: TourPackageBookingsTableProps
             ) : (
               <TableRow>
                 <TableCell colSpan={headers.length} className="h-24 text-center">
-                  No tour bookings found.
+                  No bookings found.
                 </TableCell>
               </TableRow>
             )}
