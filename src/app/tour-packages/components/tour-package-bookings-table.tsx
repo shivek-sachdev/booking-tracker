@@ -84,26 +84,23 @@ const formatTravelPeriod = (startDateStr: string | null | undefined, endDateStr:
   }
 };
 
-// Helper function to determine Badge variant based on status
-const getStatusVariant = (status: TourPackageStatus): "default" | "secondary" | "destructive" | "outline" => {
+// NEW: Helper function to get Tailwind classes for status badges
+const getStatusBadgeClasses = (status: TourPackageStatus): string => {
   switch (status) {
-    // Green / Success states
-    case 'Complete': 
-    case 'Paid (Full Payment)':
-      return 'default'; 
-    // Gray / Neutral / Completed initial step
-    case 'Paid (1st installment)':
-      return 'secondary'; 
-    // Yellow / Warning / Action needed
     case 'Open':
+      return 'bg-gray-100 text-gray-800 hover:bg-gray-100/80 dark:bg-gray-700 dark:text-gray-300'; // Grey
     case 'Negotiating':
-      return 'outline'; 
-    // Red / Problem states
-    case 'Closed': // Assuming Closed might indicate cancellation or issue
-      return 'destructive'; 
-    // Default fallback
+      return 'bg-yellow-100 text-yellow-800 hover:bg-yellow-100/80 dark:bg-yellow-700 dark:text-yellow-300'; // Yellow
+    case 'Paid (1st installment)':
+      return 'bg-blue-100 text-blue-800 hover:bg-blue-100/80 dark:bg-blue-700 dark:text-blue-300'; // Blue
+    case 'Paid (Full Payment)':
+      return 'bg-blue-600 text-white hover:bg-blue-600/80 dark:bg-blue-800 dark:text-blue-100'; // Dark Blue
+    case 'Complete':
+      return 'bg-green-100 text-green-800 hover:bg-green-100/80 dark:bg-green-700 dark:text-green-300'; // Green
+    case 'Closed':
+      return 'bg-red-100 text-red-800 hover:bg-red-100/80 dark:bg-red-700 dark:text-red-300'; // Red
     default:
-      return 'secondary'; 
+      return 'bg-gray-100 text-gray-800 hover:bg-gray-100/80 dark:bg-gray-700 dark:text-gray-300'; // Default to Grey
   }
 };
 
@@ -256,7 +253,9 @@ export function TourPackageBookingsTable({ data }: TourPackageBookingsTableProps
                     <TableCell>{formatDate(booking.booking_date)}</TableCell>
                     <TableCell>{formatTravelPeriod(booking.travel_start_date, booking.travel_end_date)}</TableCell>
                     <TableCell>
-                        <Badge variant={getStatusVariant(booking.status)}>{booking.status}</Badge>
+                      <Badge className={getStatusBadgeClasses(booking.status)} variant="outline">
+                        {booking.status}
+                      </Badge>
                     </TableCell>
                     <TableCell onClick={(e) => e.stopPropagation()} className="text-right">
                       <ActionsCell booking={booking} />
