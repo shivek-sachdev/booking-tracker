@@ -40,6 +40,8 @@ import {
   updateTourPackageBooking,
   addPaymentRecord,
   createPaymentSlipSignedUrl,
+  getPaymentsForBooking,
+  deletePaymentRecord,
 } from '@/lib/actions/tour-package-bookings'
 import { useForm, useFieldArray } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -56,11 +58,21 @@ import { createClient } from "@/lib/supabase/client";
 import { Label } from "@/components/ui/label";
 import { LinkedBookingSelectionModal } from "@/components/tour-packages/linked-booking-selection-modal";
 import type { LinkedBookingSelectItem, getBookingReferenceById as fetchBookingRefById } from "@/app/bookings/actions";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 interface TourPackageBookingFormProps {
   initialBooking: TourPackageBookingDbType | null
   products: TourProduct[]
-  payments?: PaymentRecord[]
   onSuccess?: () => void
 }
 
@@ -93,7 +105,7 @@ const formatCurrency = (amount: number | null | undefined): string => {
  }).format(roundedAmount);
 };
 
-export function TourPackageBookingForm({ initialBooking, products, payments, onSuccess }: TourPackageBookingFormProps) {
+export function TourPackageBookingForm({ initialBooking, products, onSuccess }: TourPackageBookingFormProps) {
   const router = useRouter();
   const supabase = createClient();
   const isEditing = !!initialBooking?.id;
@@ -106,6 +118,34 @@ export function TourPackageBookingForm({ initialBooking, products, payments, onS
   const [isLinkedBookingModalOpen, setIsLinkedBookingModalOpen] = React.useState(false);
   const [selectedLinkedBookingRef, setSelectedLinkedBookingRef] = React.useState<string | null>(null);
   const [isFetchingInitialRef, setIsFetchingInitialRef] = React.useState(false);
+
+  // State for payment history
+  const [existingPayments, setExistingPayments] = React.useState<PaymentRecord[]>([]);
+  const [isLoadingPayments, setIsLoadingPayments] = React.useState(true); // Start true
+  const [isDeletingPaymentId, setIsDeletingPaymentId] = React.useState<string | null>(null);
+
+  // State for delete confirmation dialog
+  const [paymentIdForAlertDialog, setPaymentIdForAlertDialog] = React.useState<string | null>(null);
+
+  // Callback to fetch payments
+  const doFetchBookingPayments = React.useCallback(async () => {
+    if (!initialBooking?.id) {
+      setExistingPayments([]);
+      setIsLoadingPayments(false);
+      return;
+    }
+    setIsLoadingPayments(true);
+    try {
+      const paymentsData = await getPaymentsForBooking(initialBooking.id);
+      setExistingPayments(paymentsData || []);
+    } catch (error) {
+      console.error("Failed to fetch payments:", error);
+      toast.error("Could not load payment history.");
+      setExistingPayments([]);
+    } finally {
+      setIsLoadingPayments(false);
+    }
+  }, [initialBooking?.id]);
 
   // useEffect to fetch PNR for initial linked booking
   React.useEffect(() => {
@@ -129,8 +169,11 @@ export function TourPackageBookingForm({ initialBooking, products, payments, onS
 
     if (isEditing) { // Only run for existing bookings
         fetchInitialReference();
+        doFetchBookingPayments(); // Fetch payments when editing
+    } else {
+        setIsLoadingPayments(false); // Not editing, so not loading payments initially
     }
-  }, [initialBooking?.linked_booking_id, isEditing]); // Depend on the ID and edit status
+  }, [initialBooking?.linked_booking_id, isEditing, doFetchBookingPayments]); // Added doFetchBookingPayments
 
   const form = useForm<TourPackageBookingFormValues>({
     resolver: zodResolver(TourPackageBookingSchema),
@@ -287,7 +330,7 @@ export function TourPackageBookingForm({ initialBooking, products, payments, onS
               if (fileInputRef.current) {
                 fileInputRef.current.value = ""; // Clear file input
               }
-              router.refresh(); // Refresh to see if new payment affects displayed single payment
+              if (bookingIdToUse) doFetchBookingPayments(); // Refresh payment list
             } else {
               toast.error(`Failed to add payment record: ${paymentResult.message}`);
             }
@@ -362,28 +405,31 @@ export function TourPackageBookingForm({ initialBooking, products, payments, onS
     });
   };
 
-  // Re-introduce logic for handling single payment slip based on status
-  const paymentStatuses: TourPackageStatus[] = ['Paid (1st installment)', 'Paid (Full Payment)'];
-  
-  const firstInstallmentPayment = React.useMemo(() => {
-    return payments?.find(p => p.status_at_payment === 'Paid (1st installment)');
-  }, [payments]);
+  // New: Opens the confirmation dialog (sets the ID for the AlertDialog)
+  const triggerDeleteConfirmation = (paymentId: string) => {
+    setPaymentIdForAlertDialog(paymentId);
+  };
 
-  const fullPaymentPayment = React.useMemo(() => {
-    return payments?.find(p => p.status_at_payment === 'Paid (Full Payment)');
-  }, [payments]);
-  
-  const paymentExistsForCurrentStatus = watchedStatus === 'Paid (1st installment)'
-                                        ? !!firstInstallmentPayment
-                                        : watchedStatus === 'Paid (Full Payment)'
-                                            ? !!fullPaymentPayment
-                                            : false;
+  // New: Executes the actual deletion after confirmation
+  const executeDeletePayment = async () => {
+    if (!paymentIdForAlertDialog) return;
 
-  const currentStatusPaymentRecord = watchedStatus === 'Paid (1st installment)'
-                                ? firstInstallmentPayment
-                                : watchedStatus === 'Paid (Full Payment)'
-                                    ? fullPaymentPayment
-                                    : null;
+    setIsDeletingPaymentId(paymentIdForAlertDialog);
+    try {
+      const result = await deletePaymentRecord(paymentIdForAlertDialog);
+      if (result.success) {
+        toast.success(result.message);
+        doFetchBookingPayments(); // Refresh the list
+      } else {
+        toast.error(result.message);
+      }
+    } catch (error: any) { 
+      toast.error( (error && typeof error === 'object' && 'message' in error) ? String(error.message) : "Could not delete payment record.");
+    } finally {
+      setIsDeletingPaymentId(null);
+      setPaymentIdForAlertDialog(null);
+    }
+  };
 
   return (
     <>
@@ -776,109 +822,129 @@ export function TourPackageBookingForm({ initialBooking, products, payments, onS
                 )}
               </div>
 
-              {/* Conditional Payment Slip Upload (Restored Old Logic) */}
-              {paymentStatuses.includes(watchedStatus) && (
-                <div className="md:col-span-2 space-y-4 border-t pt-6 mt-4">
-                  {/* Display info about 1st installment if current status is Full Payment and 1st existed */}
-                  {watchedStatus === 'Paid (Full Payment)' && firstInstallmentPayment && (
-                    <div className="flex items-center justify-between p-2 bg-muted/50 rounded dark:bg-slate-800/50">
-                      <p className="text-sm text-muted-foreground">
-                        <span className="font-medium">1st Installment Slip:</span> Already recorded.
-                      </p>
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => handleViewExistingSlip(firstInstallmentPayment.payment_slip_path)}
-                        disabled={isViewUrlLoading}
-                        title="View 1st Installment Slip"
-                      >
-                        {isViewUrlLoading && firstInstallmentPayment.payment_slip_path === (isViewUrlLoading && "PENDING_PATH_CHECK") ? ( 
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        ) : (
-                          <Eye className="mr-2 h-4 w-4" />
-                        )}
-                        View 1st Slip
-                      </Button>
-                    </div>
-                  )}
-                  
-                  <div className="mt-2">
-                    {!paymentExistsForCurrentStatus && ( 
-                      <>
-                        <Label htmlFor="payment_slip_upload_single">
-                          Upload Slip for <span className='font-semibold'>{watchedStatus}</span> (Max 5MB)
-                        </Label>
-                        <div className="flex items-center gap-4 mt-1">
-                          <Input
-                            id="payment_slip_upload_single"
-                            type="file"
-                            ref={fileInputRef}
-                            accept="image/jpeg,image/png,image/gif,image/webp,application/pdf"
-                            onChange={handleFileChange}
-                            className="flex-grow"
-                            disabled={isUploading}
-                          />
-                          {isUploading && <UploadCloud className="h-5 w-5 animate-spin text-muted-foreground" />}
-                        </div>
-                        {selectedFile && (
-                          <div className="text-sm text-muted-foreground flex items-center gap-2 mt-1">
-                            <span>Selected: {selectedFile.name} ({(selectedFile.size / 1024 / 1024).toFixed(2)} MB)</span>
-                            <Button 
-                              type="button" 
-                              variant="ghost" 
-                              size="sm" 
-                              onClick={() => {
-                                setSelectedFile(null);
-                                if (fileInputRef.current) fileInputRef.current.value = "";
-                              }}
-                              className="text-red-500 hover:text-red-700 h-6 px-1"
-                              disabled={isUploading}
-                              aria-label="Clear selection"
-                            >
-                              <XIcon className="h-3 w-3 mr-1"/> Clear
-                            </Button>
-                          </div>
-                        )}
-                      </>
+              {/* Payment History Section */}
+              {isEditing && (
+                <Card className="md:col-span-2 mt-6">
+                  <CardHeader>
+                    <CardTitle>Payment History</CardTitle>
+                    <CardDescription>Uploaded payment slips for this booking.</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {isLoadingPayments ? (
+                      <div className="flex items-center"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Loading payments...</div>
+                    ) : existingPayments.length > 0 ? (
+                      <ul className="space-y-3">
+                        {existingPayments.map((payment) => (
+                          <li key={payment.id} className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-3 border rounded-md bg-slate-50 dark:bg-slate-800/30 gap-2">
+                            <div className="flex-grow">
+                              <p className="text-sm font-medium">
+                                Uploaded: {format(new Date(payment.uploaded_at), "PPp")}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                Status at Payment: {payment.status_at_payment}
+                              </p>
+                              <p className="text-xs text-muted-foreground truncate max-w-[200px] sm:max-w-xs" title={payment.payment_slip_path}>
+                                File: {payment.payment_slip_path.split('/').pop()}
+                              </p>
+                              {payment.is_verified && payment.verified_amount != null && (
+                                <p className="text-xs text-green-600 dark:text-green-400">
+                                  Verified Amount: {formatCurrency(payment.verified_amount)}
+                                </p>
+                              )}
+                              {payment.is_verified === false && payment.verification_error && (
+                                <p className="text-xs text-red-600 dark:text-red-400" title={payment.verification_error}>
+                                  Verification Error (hover to see)
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex items-center space-x-2 mt-2 sm:mt-0 flex-shrink-0">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleViewExistingSlip(payment.payment_slip_path)}
+                                disabled={isViewUrlLoading || isDeletingPaymentId === payment.id}
+                                aria-label="View payment slip"
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                              <AlertDialog open={paymentIdForAlertDialog === payment.id} onOpenChange={(isOpen) => { if(!isOpen) setPaymentIdForAlertDialog(null);}}>
+                                <AlertDialogTrigger asChild>
+                                  <Button
+                                    variant="destructive"
+                                    size="sm"
+                                    disabled={isDeletingPaymentId === payment.id || isViewUrlLoading}
+                                    aria-label="Delete payment record"
+                                    onClickCapture={(e) => { 
+                                      e.stopPropagation();
+                                      setPaymentIdForAlertDialog(payment.id);
+                                    }}
+                                  >
+                                    {isDeletingPaymentId === payment.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Confirm Payment Deletion</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Are you sure you want to delete this payment record and its associated slip ({payment.payment_slip_path.split('/').pop()})? This action cannot be undone.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel onClick={() => setPaymentIdForAlertDialog(null)} disabled={isDeletingPaymentId === payment.id}>
+                                      Cancel
+                                    </AlertDialogCancel>
+                                    <AlertDialogAction 
+                                      onClick={executeDeletePayment} 
+                                      disabled={isDeletingPaymentId === payment.id}
+                                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                    >
+                                      {isDeletingPaymentId === payment.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                                      Delete Payment
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-sm text-muted-foreground text-center py-3">No payment slips uploaded yet.</p>
                     )}
-                    {paymentExistsForCurrentStatus && currentStatusPaymentRecord && ( 
-                      <div className="flex items-center justify-between p-3 border rounded-md bg-slate-50 dark:bg-slate-800/30">
-                        <div>
-                          <p className="text-sm font-medium text-green-600 dark:text-green-400">
-                            ✅ Slip Uploaded for "{watchedStatus}"
-                          </p>
-                           <p className="text-xs text-muted-foreground truncate max-w-xs" title={currentStatusPaymentRecord.payment_slip_path}>
-                                File: {currentStatusPaymentRecord.payment_slip_path.split('/').pop()}
-                           </p>
-                        </div>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleViewExistingSlip(currentStatusPaymentRecord.payment_slip_path)}
-                          disabled={isViewUrlLoading}
-                          title={`View Slip for ${watchedStatus}`}
-                        >
-                          {isViewUrlLoading && currentStatusPaymentRecord.payment_slip_path === (isViewUrlLoading && "PENDING_PATH_CHECK") ? ( 
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          ) : (
-                            <Eye className="mr-2 h-4 w-4" />
-                          )}
-                          View Slip
-                        </Button>
-                      </div>
-                    )}
-                    {paymentExistsForCurrentStatus && selectedFile && (
-                       <p className="text-sm text-orange-600 dark:text-orange-400 mt-2">
-                         Note: You have selected a new file <span className="font-semibold">({selectedFile.name})</span>.
-                         Saving will replace the existing payment record for the status <span className="font-semibold">"{watchedStatus}"</span> if this status hasn't changed,
-                         or create a new payment record if the status <span className="font-semibold">"{watchedStatus}"</span> is different from the one associated with the original slip.
-                       </p>
-                    )}
-                  </div>
-                </div>
+                  </CardContent>
+                </Card>
               )}
+
+              {/* File Upload Section - Always available for new uploads */}
+              <div className="md:col-span-2 space-y-2 border-t pt-6 mt-4">
+                <Label htmlFor="payment_slip_new_upload">
+                  Upload New Payment Slip (Max 5MB)
+                </Label>
+                <div className="flex items-center space-x-2">
+                  <Input
+                    id="payment_slip_new_upload" // Changed ID to avoid conflict
+                    type="file"
+                    ref={fileInputRef}
+                    accept="image/jpeg,image/png,image/gif,image/webp,application/pdf"
+                    onChange={handleFileChange}
+                    className="flex-grow"
+                    disabled={isUploading}
+                  />
+                  {selectedFile && (
+                    <Button variant="ghost" size="icon" onClick={() => {
+                      setSelectedFile(null);
+                      if (fileInputRef.current) fileInputRef.current.value = "";
+                    }} aria-label="Clear selected file" disabled={isUploading}>
+                      <XCircleIcon className="h-5 w-5 text-muted-foreground" />
+                    </Button>
+                  )}
+                </div>
+                {selectedFile && (
+                  <p className="text-sm text-muted-foreground">
+                    Selected: {selectedFile.name} ({(selectedFile.size / 1024 / 1024).toFixed(2)} MB) - This will be recorded with current status: <span className="font-semibold">{watchedStatus}</span>
+                  </p>
+                )}
+              </div>
 
             </CardContent>
             <CardFooter className="border-t px-6 py-4 flex justify-end">

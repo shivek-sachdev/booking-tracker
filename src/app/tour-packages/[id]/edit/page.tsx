@@ -91,7 +91,6 @@ export default async function EditTourPackageBookingPage({ params }: EditTourPac
       <TourPackageBookingForm 
         initialBooking={booking} 
         products={products ?? []} // Ensure products is always an array
-        payments={payments ?? []}
       />
     </div>
   );
