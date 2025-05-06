@@ -12,17 +12,14 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { ArrowLeft } from 'lucide-react';
-// Import the action and type for booking references
-import { getBookingReferences, type BookingReference } from "@/app/bookings/actions";
 
 // Ensure the page is dynamically rendered if needed, but often data fetching makes it dynamic anyway
 // export const dynamic = "force-dynamic";
 
 export default async function NewTourPackageBookingPage() {
   // Fetch products and booking references concurrently
-  const [products, bookingReferences] = await Promise.all([
+  const [products] = await Promise.all([
     getTourProducts(),
-    getBookingReferences()
   ]);
 
   // Handle error fetching products
@@ -67,7 +64,6 @@ export default async function NewTourPackageBookingPage() {
       <TourPackageBookingForm 
         initialBooking={null} 
         products={products} 
-        bookingReferences={bookingReferences} // Pass the fetched references
       />
     </div>
   );

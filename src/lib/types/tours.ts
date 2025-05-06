@@ -144,6 +144,7 @@ export interface TourPackageBooking extends Omit<z.infer<typeof TourPackageBooki
 // Interface for booking joined with product name
 export interface TourPackageBookingWithProduct extends TourPackageBooking {
   tour_products: { name: string } | null;
+  linked_booking_pnr?: string | null;
 }
 
 // --- NEW: Payment Record Type ---

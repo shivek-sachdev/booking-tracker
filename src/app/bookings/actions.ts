@@ -300,18 +300,120 @@ export interface BookingReference {
 
 export async function getBookingReferences(): Promise<BookingReference[]> {
   const supabase = createSimpleServerClient();
-  const relevantStatuses: BookingStatus[] = ['Confirmed', 'Waiting List']; // Define relevant statuses
-  
   const { data, error } = await supabase
     .from('bookings')
     .select('id, booking_reference')
-    .in('status', relevantStatuses) // <-- Filter by status
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false }); // Example order, adjust as needed
 
   if (error) {
-    console.error('Database Error fetching booking references:', error);
+    console.error('Error fetching booking references:', error);
     return [];
   }
+  return data || [];
+}
 
-  return (data as BookingReference[]) || [];
+// New Type Definition for the items in the paginated list
+export interface LinkedBookingSelectItem {
+  id: string; // booking id
+  booking_reference: string | null;
+  customer_name: string | null;
+  earliest_travel_date: string | null; // ISO date string
+  status: BookingStatus | null;
+  created_at: string; // ISO date string
+}
+
+// Server action to fetch paginated ticket bookings for linking
+export async function getPaginatedBookingsForLinking(
+  page: number = 1,
+  pageSize: number = 10,
+  searchTerm?: string | null
+): Promise<{ bookings: LinkedBookingSelectItem[]; totalCount: number; error?: string }> {
+  const supabase = createSimpleServerClient();
+  const offset = (page - 1) * pageSize;
+
+  try {
+    let query = supabase
+      .from('bookings')
+      .select(`
+        id,
+        booking_reference,
+        status,
+        created_at,
+        customers ( company_name ),
+        booking_sectors ( travel_date )
+      `, { count: 'exact' }) // Important for total count
+      .order('created_at', { ascending: false });
+
+    if (searchTerm) {
+      // Ensure customers is not null before attempting to use it in the 'or' clause
+      // This might require a more complex query or a view/function if direct filtering on joined table like this is problematic
+      // For simplicity, we're trying direct ilike. If Supabase errors, this part needs adjustment.
+      // A safer approach might be to filter bookings first, then join, or use a text search vector.
+      query = query.or(`booking_reference.ilike.%${searchTerm}%,customers.company_name.ilike.%${searchTerm}%`);
+    }
+
+    query = query.range(offset, offset + pageSize - 1);
+
+    const { data, error, count } = await query;
+
+    if (error) {
+      console.error('Error fetching paginated bookings for linking:', error);
+      return { bookings: [], totalCount: 0, error: error.message };
+    }
+
+    const bookingsWithEarliestTravelDate = data.map(booking => {
+      // Ensure booking_sectors is an array and not null
+      const sectorsArray = Array.isArray(booking.booking_sectors) ? booking.booking_sectors : [];
+      
+      const earliestSector = sectorsArray.reduce((earliest: any, current: any) => {
+        if (!current.travel_date) return earliest;
+        // Ensure earliest is not null and has a travel_date before comparing
+        if (!earliest || !earliest.travel_date || new Date(current.travel_date) < new Date(earliest.travel_date)) {
+          return current;
+        }
+        return earliest;
+      }, null);
+
+      return {
+        id: booking.id,
+        booking_reference: booking.booking_reference,
+        // @ts-ignore - customers can be null if not found or if join is structured differently.
+        customer_name: booking.customers?.company_name || 'N/A',
+        earliest_travel_date: earliestSector?.travel_date || null,
+        status: booking.status as BookingStatus, // Assuming status is always one of BookingStatus or null
+        created_at: booking.created_at,
+      };
+    });
+
+    return {
+      bookings: bookingsWithEarliestTravelDate,
+      totalCount: count || 0,
+    };
+  } catch (e) {
+    console.error('Unexpected error in getPaginatedBookingsForLinking:', e);
+    const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
+    return { bookings: [], totalCount: 0, error: errorMessage };
+  }
+}
+
+export async function getBookingReferenceById(bookingId: string): Promise<string | null> {
+  if (!bookingId) return null;
+  const supabase = createSimpleServerClient();
+  try {
+    const { data, error } = await supabase
+      .from('bookings')
+      .select('booking_reference')
+      .eq('id', bookingId)
+      .single();
+
+    if (error) {
+      console.error(`Error fetching booking reference for ID ${bookingId}:`, error.message);
+      return null;
+    }
+    return data?.booking_reference || null;
+  } catch (e) {
+    const errorMessage = e instanceof Error ? e.message : 'Unknown error';
+    console.error(`Unexpected error fetching booking reference for ID ${bookingId}:`, errorMessage);
+    return null;
+  }
 } 

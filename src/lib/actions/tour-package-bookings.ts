@@ -34,7 +34,6 @@ function generateAlphanumericId(length: number): string {
 
 // --- CREATE ---
 export async function createTourPackageBooking(
-  prevState: FormState,
   formData: FormData
 ): Promise<FormState> {
   const supabase = createSimpleServerClient();
@@ -170,10 +169,14 @@ export async function createTourPackageBooking(
 // --- UPDATE ---
 export async function updateTourPackageBooking(
   id: string,
-  prevState: FormState,
   formData: FormData
 ): Promise<FormState> {
-  if (!id) return { message: 'Error: Missing booking ID for update.' };
+  // Log the ID received by the function immediately
+  console.log(`[updateTourPackageBooking] Received ID: ${id}, Type: ${typeof id}`); 
+  if (!id || typeof id !== 'string') { // Add stricter check for ID
+     console.error('[updateTourPackageBooking] Invalid or missing ID received:', id);
+     return { message: 'Error: Invalid or missing booking ID for update.' };
+  }
 
   const supabase = createSimpleServerClient();
 
@@ -231,6 +234,7 @@ export async function updateTourPackageBooking(
 
   // Destructure validated data
   const { 
+      // Restore all fields
       customer_name, 
       tour_product_id, 
       base_price_per_pax, 
@@ -244,13 +248,13 @@ export async function updateTourPackageBooking(
       linked_booking_id
   } = validatedFields.data;
 
-  // --- Server-side Calculation --- 
+  // --- Server-side Calculation (Restore) --- 
   const addonsTotal = addons.reduce((sum, item) => sum + item.amount, 0);
   const totalPerPax = (base_price_per_pax ?? 0) + addonsTotal;
   const grandTotal = totalPerPax * pax;
   // --- End Calculation ---
 
-  // 2. Prepare data for Supabase update
+  // 2. Prepare data for Supabase update (Restore all fields)
   const dataToUpdate = {
       customer_name,
       tour_product_id,
@@ -264,23 +268,29 @@ export async function updateTourPackageBooking(
       travel_start_date: travel_start_date?.toISOString(),
       travel_end_date: travel_end_date?.toISOString(),
       notes,
-      linked_booking_id,
+      linked_booking_id, // Keep this
       updated_at: new Date().toISOString(),
   };
 
   // 3. Update data in Supabase
   try {
+    // Restore original log message
     console.log(`Attempting to update tour booking ${id}:`, dataToUpdate);
-    const { error } = await supabase
+    // Remove .select() and result logging
+    const { error } = await supabase 
       .from('tour_package_bookings')
       .update(dataToUpdate)
       .eq('id', id);
+      // .select(); // Remove select()
 
     if (error) {
       console.error('Supabase Update Error:', error);
       return { message: `Database Error: Failed to update tour booking. ${error.message}` };
     }
-    console.log(`Tour booking ${id} updated successfully.`);
+    // Remove Supabase result log
+    // console.log(`Supabase update result for ${id}:`, updateResult);
+    // Restore original success log
+    console.log(`Tour booking ${id} updated successfully.`); 
   } catch (error) {
     console.error('Unexpected Error:', error);
     return { message: 'Unexpected Error: Could not update tour booking.' };
@@ -289,7 +299,7 @@ export async function updateTourPackageBooking(
   // 4. Revalidate cache and return success
   revalidatePath('/tour-packages');
   revalidatePath(`/tour-packages/${id}/edit`);
-  revalidatePath(`/tour-packages/${id}`); // Revalidate detail page too
+  revalidatePath(`/tour-packages/${id}`); 
   return { message: 'Successfully updated tour booking!' };
 }
 
@@ -519,7 +529,9 @@ export async function getTourPackageBookings(): Promise<TourPackageBookingWithPr
 export async function getTourPackageBookingById(id: string): Promise<TourPackageBookingWithProduct | null> {
   if (!id) return null;
   const supabase = createSimpleServerClient();
-  const { data, error } = await supabase
+  
+  // Step 1: Fetch the main tour package booking data
+  const { data: bookingData, error: bookingError } = await supabase
     .from('tour_package_bookings')
     .select(`
       id, customer_name, tour_product_id, 
@@ -534,16 +546,50 @@ export async function getTourPackageBookingById(id: string): Promise<TourPackage
     .eq('id', id)
     .single();
 
-  if (error) {
-    console.error(`Database Error fetching booking ${id}:`, error);
-     if (error.code === 'PGRST116') { 
-       return null; // Not found
-     }
+  if (bookingError) {
+    console.error(`Database Error fetching booking ${id}:`, bookingError);
+    if (bookingError.code === 'PGRST116') { 
+      return null; // Not found
+    }
     return null;
   }
+
+  if (!bookingData) {
+    return null; 
+  }
+
+  // Step 2: If linked_booking_id exists, fetch the corresponding booking reference
+  let linkedPnr: string | null = null;
+  const bookingDataAsAny = bookingData as any; 
+  if (bookingDataAsAny?.linked_booking_id) { 
+    console.log(`[getTourPackageBookingById] Found linked_booking_id: ${bookingDataAsAny.linked_booking_id}. Fetching PNR...`); // Log: Attempting fetch
+    const { data: linkedBookingData, error: linkedBookingError } = await supabase
+      .from('bookings')
+      .select('booking_reference')
+      .eq('id', bookingDataAsAny.linked_booking_id) 
+      .maybeSingle(); 
+      
+    if (linkedBookingError) {
+      console.error(`[getTourPackageBookingById] Error fetching linked booking reference for tour ${id}:`, linkedBookingError);
+    } else if (linkedBookingData) {
+      linkedPnr = linkedBookingData.booking_reference;
+      console.log(`[getTourPackageBookingById] Successfully fetched linked PNR: ${linkedPnr}`); // Log: Success
+    } else {
+      console.log(`[getTourPackageBookingById] Linked booking ID ${bookingDataAsAny.linked_booking_id} found, but no matching booking record in 'bookings' table.`); // Log: Linked booking not found
+    }
+  } else {
+      console.log(`[getTourPackageBookingById] No linked_booking_id found for tour ${id}.`); // Log: No link
+  }
+
+  // Step 3: Combine the data and add the linked PNR
+  const result: TourPackageBookingWithProduct = {
+    ...(bookingData as unknown as TourPackageBookingWithProduct), 
+    linked_booking_pnr: linkedPnr,
+  };
   
-  // Use safer type assertion
-  return (data as unknown as TourPackageBookingWithProduct) || null;
+  console.log(`[getTourPackageBookingById] Returning final object for tour ${id}:`, result); // Log: Final result
+
+  return result;
 }
 
 // --- NEW: READ Payments for a Booking ---

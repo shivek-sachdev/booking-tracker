@@ -150,6 +150,8 @@ export default async function TourPackageDetailPage({ params }: TourPackageDetai
                              {booking.status}
                          </Badge>
                      } />
+                     {/* Add Linked PNR Display */}
+                     <DetailItem label="Linked Ticket Booking PNR" value={booking.linked_booking_pnr || 'N/A'} />
                  </div>
                  {/* Right Column */}
                  <div>

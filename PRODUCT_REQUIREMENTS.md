@@ -3,7 +3,7 @@
 **1. Introduction**
 
 *   **1.1 Purpose:** This document outlines the requirements for the Booking Tracker application. The application aims to provide a centralized platform for managing travel bookings, associated customer data, deadlines, and key performance metrics. It serves as an internal tool to improve operational efficiency and visibility into the booking process.
-*   **1.2 Scope:** The current scope includes user authentication, a central dashboard displaying key metrics and urgent tasks (deadlines), and likely sections for managing bookings, customers, and potentially fares/sectors (inferred from directory structure). **It also includes dedicated functionality for managing Tour Package bookings and their associated Tour Products.**
+*   **1.2 Scope:** The current scope includes user authentication, a central dashboard displaying key metrics and urgent tasks (deadlines), and likely sections for managing bookings, customers, and potentially fares/sectors (inferred from directory structure). **It also includes dedicated functionality for managing Tour Package bookings, their associated Tour Products, payment tracking, and detailed pricing with add-ons.**
 *   **1.3 Target Audience:** Internal users such as booking agents, operations managers, or administrators responsible for overseeing and managing travel reservations **(both standard bookings and tour packages)**.
 
 **2. Goals**
@@ -59,7 +59,12 @@
 *   **4.8 Tour Package Booking Management:**
     *   `FR-TPKG-01`: Users shall be able to Create, Read, Update, and Delete (CRUD) Tour Package bookings, each identified by a unique ID.
     *   `FR-TPKG-02`: When creating/editing a Tour Package booking, users must be able to select a "Tour Product" from the master list defined in FR-TPRD-01.
-    *   `FR-TPKG-03`: Users must be able to manually enter the final price for the selected Tour Product within the specific booking record.
+    *   `FR-TPKG-03`: Users must be able to manually enter the **base price per person (`base_price_per_pax`)** for the selected Tour Product within the specific booking record.
+    *   `FR-TPKG-03a`: Users shall be able to add, edit, and remove custom add-on line items to a Tour Package booking. Each add-on shall have a name and an amount.
+    *   `FR-TPKG-03b`: The system shall automatically calculate the `total_per_pax` by summing the `base_price_per_pax` and the amounts of all associated add-on items.
+    *   `FR-TPKG-03c`: The system shall automatically calculate the `grand_total` by multiplying the `total_per_pax` by the number of participants (`pax`) for the booking. (Requires a `number_of_pax` field in the booking).
+    *   `FR-TPKG-03d`: The `base_price_per_pax`, the list/array of `addons` (including their names and amounts, likely stored as JSONB), the calculated `total_per_pax`, and the calculated `grand_total` shall be stored in the database for each tour package booking.
+    *   `FR-TPKG-03e`: The booking creation/edit form and the booking detail view shall display the `base_price_per_pax`, a clear list of all add-ons with their individual amounts, the `total_per_pax`, and the `grand_total`.
     *   `FR-TPKG-04`: Users must be able to enter the customer's name as free-form text directly into the Tour Package booking record (no mandatory link to the main `Customers` table).
     *   `FR-TPKG-05`: Tour Package bookings should include relevant dates (e.g., booking date, travel start/end dates) and potentially a status (including Open, Negotiating, Paid (1st Installment), Paid (Full Payment), Complete, Closed).
     *   `FR-TPKG-06`: A dedicated section/page shall exist for managing Tour Package bookings.
@@ -90,6 +95,7 @@
     *   `NFR-USAB-04`: The main sidebar shall include an easily accessible logout button, allowing users to securely end their session.
     *   `NFR-USAB-05`: The main sidebar navigation shall include a link to the dedicated \"Payments\" ledger page.
     *   `NFR-USAB-06`: After successfully updating a Tour Package booking via the edit form, the user shall be redirected back to the Tour Package listing page.
+    *   `NFR-USAB-07`: Status badges within the Tour Package booking list shall be color-coded for quick visual differentiation of statuses (e.g., 'Open' - blue, 'Negotiating' - yellow, 'Paid' - green, 'Complete' - purple, 'Closed' - gray).
 *   **5.3 Reliability:**
     *   `NFR-RELI-01`: The application should handle errors gracefully (e.g., display informative messages if data fetching fails). Next.js `error.tsx` conventions should be used.
     *   `NFR-RELI-02`: Loading states should be indicated clearly to the user while data is being fetched (Next.js `loading.tsx`).
@@ -110,7 +116,7 @@ Based on `src/app/page.tsx` and directory structure:
 *   **Users:** For authentication (managed by Supabase Auth).
 *   **Fares (Implied):** Details about pricing or fare rules.
 *   **Tour Products:** Master list of available tour packages (e.g., name, description).
-*   **Tour Package Bookings:** Records of specific tour package sales, linking to a Tour Product, storing the entered customer name, price, dates, and status. Each record has a unique 5-character alphanumeric ID. May include a link to a standard booking (`linked_booking_id`). Payment slips are stored in Supabase Storage and referenced in a separate `payments` table.
+*   **Tour Package Bookings:** Records of specific tour package sales, linking to a Tour Product, storing the entered customer name, **`base_price_per_pax`, an array/JSONB of `addons` (each with name and amount), calculated `total_per_pax`, calculated `grand_total`, number of `pax` (participants)**, dates, and status. Each record has a unique 5-character alphanumeric ID. May include a link to a standard booking (`linked_booking_id`). Payment slips are stored in Supabase Storage and referenced in a separate `payments` table.
 *   **Payments:** Records linking a tour package booking to an uploaded payment slip, including the booking status at the time of payment and an upload timestamp.
 
 **7. Technology Stack**
@@ -121,6 +127,7 @@ Based on `src/app/page.tsx` and directory structure:
 *   **Component Library:** Shadcn UI
 *   **Styling:** Tailwind CSS
 *   **Database & Backend:** Supabase (PostgreSQL, Auth, **Storage**, Realtime - potentially)
+*   **AI/LLM Provider:** Mistral AI (via `@mistralai/mistralai` SDK for features like payment slip OCR)
 *   **State Management:** Primarily Server Components; potentially `useState`/`useEffect` in client components, `nuqs` for URL state (if used).
 *   **Deployment:** Likely Vercel (common pairing with Next.js).
 
@@ -134,4 +141,5 @@ Based on `src/app/page.tsx` and directory structure:
 *   Define specific fields needed for `Tour Products` and `Tour Package Bookings` tables.
 *   Clarify if deadlines or specific statuses apply to Tour Package Bookings similarly to standard Bookings.
 *   Define how the unique 5-character alphanumeric ID for Tour Package Bookings is generated or enforced upon creation/update.
-*   Determine appropriate access policies for the Supabase Storage bucket used for payment slips. 
+*   Determine appropriate access policies for the Supabase Storage bucket used for payment slips.
+*   Ensure a `number_of_pax` field is present and utilized for `grand_total` calculations in Tour Package Bookings. 
