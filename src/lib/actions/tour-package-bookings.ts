@@ -104,8 +104,11 @@ export async function createTourPackageBooking(
 
   // --- Server-side Calculation --- 
   const addonsTotal = addons.reduce((sum, item) => sum + item.amount, 0);
-  const totalPerPax = (base_price_per_pax ?? 0) + addonsTotal;
-  const grandTotal = totalPerPax * pax; 
+  const baseSubtotal = (base_price_per_pax ?? 0) * pax;
+  const grandTotal = baseSubtotal + addonsTotal;
+  
+  // For backward compatibility, still compute total_per_pax but don't use it in grand total
+  const totalPerPax = (base_price_per_pax ?? 0);
   // --- End Calculation ---
 
   // 2. Generate Unique 5-Character Alphanumeric ID
@@ -250,8 +253,11 @@ export async function updateTourPackageBooking(
 
   // --- Server-side Calculation (Restore) --- 
   const addonsTotal = addons.reduce((sum, item) => sum + item.amount, 0);
-  const totalPerPax = (base_price_per_pax ?? 0) + addonsTotal;
-  const grandTotal = totalPerPax * pax;
+  const baseSubtotal = (base_price_per_pax ?? 0) * pax;
+  const grandTotal = baseSubtotal + addonsTotal;
+  
+  // For backward compatibility, still compute total_per_pax but don't use it in grand total
+  const totalPerPax = (base_price_per_pax ?? 0);
   // --- End Calculation ---
 
   // 2. Prepare data for Supabase update (Restore all fields)

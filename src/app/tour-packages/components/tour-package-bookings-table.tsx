@@ -247,7 +247,11 @@ export function TourPackageBookingsTable({ data }: TourPackageBookingsTableProps
                       {booking.tour_products?.name || 'N/A'}
                     </TableCell>
                     <TableCell className="text-right font-medium">
-                       {formatCurrency(booking.grand_total)} 
+                      {formatCurrency(
+                        // Calculate grand total using new pricing model
+                        ((booking.base_price_per_pax || 0) * booking.pax) + 
+                        (booking.addons?.reduce((sum, addon) => sum + (addon.amount || 0), 0) || 0)
+                      )}
                     </TableCell>
                     <TableCell className="text-center">{booking.pax}</TableCell>
                     <TableCell>{formatDate(booking.booking_date)}</TableCell>

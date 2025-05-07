@@ -157,7 +157,13 @@ export default async function TourPackageDetailPage({ params }: TourPackageDetai
                  <div>
                      <DetailItem label="Base Price per PAX" value={formatCurrency(booking.base_price_per_pax)} />
                      <DetailItem label="PAX" value={booking.pax} />
-                     <DetailItem label="Total per Person" value={formatCurrency(booking.total_per_pax)} />
+                     <DetailItem label="Base Subtotal" value={formatCurrency((booking.base_price_per_pax || 0) * booking.pax)} />
+                     {booking.addons && Array.isArray(booking.addons) && booking.addons.length > 0 && (
+                       <DetailItem 
+                         label="Additional Costs (Fixed)" 
+                         value={formatCurrency(booking.addons.reduce((sum, addon) => sum + (addon.amount || 0), 0))} 
+                       />
+                     )}
                      <DetailItem label="Grand Total" value={formatCurrency(booking.grand_total)} />
                      <DetailItem label="Travel Period" value={formatTravelPeriod(booking.travel_start_date, booking.travel_end_date)} />
                  </div>
