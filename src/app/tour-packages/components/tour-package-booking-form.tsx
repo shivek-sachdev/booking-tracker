@@ -226,24 +226,27 @@ export function TourPackageBookingForm({ initialBooking, products, onSuccess }: 
   const watchedStatus = form.watch("status");
   const watchedLinkedBookingId = form.watch("linked_booking_id");
 
-  const { totalPerPax, grandTotal } = React.useMemo(() => {
+  const { baseSubtotal, addonsTotal, grandTotal } = React.useMemo(() => {
     const basePrice = Number(watchedBasePrice || 0);
     const pax = Number(watchedPax || 1);
     const addonsTotal = watchedAddons?.reduce((sum, item) => sum + Number(item.amount || 0), 0) ?? 0;
-    let calculatedTotalPerPax = 0;
-    if (!isNaN(basePrice) && basePrice >= 0) {
-        calculatedTotalPerPax += basePrice;
+    
+    // Calculate base price × pax
+    let calculatedBaseSubtotal = 0;
+    if (!isNaN(basePrice) && basePrice >= 0 && !isNaN(pax) && pax > 0) {
+      calculatedBaseSubtotal = basePrice * pax;
     }
-     if (!isNaN(addonsTotal) && addonsTotal > 0) {
-         calculatedTotalPerPax += addonsTotal;
-     }
-    let calculatedGrandTotal = 0;
-    if (calculatedTotalPerPax >= 0 && !isNaN(pax) && pax > 0) {
-      calculatedGrandTotal = calculatedTotalPerPax * pax;
+    
+    // Add-ons are now added directly to the final total (not multiplied by pax)
+    let calculatedGrandTotal = calculatedBaseSubtotal;
+    if (!isNaN(addonsTotal) && addonsTotal > 0) {
+      calculatedGrandTotal += addonsTotal;
     }
+    
     return {
-        totalPerPax: isNaN(calculatedTotalPerPax) ? 0 : calculatedTotalPerPax,
-        grandTotal: isNaN(calculatedGrandTotal) ? 0 : calculatedGrandTotal
+      baseSubtotal: isNaN(calculatedBaseSubtotal) ? 0 : calculatedBaseSubtotal,
+      addonsTotal: isNaN(addonsTotal) ? 0 : addonsTotal,
+      grandTotal: isNaN(calculatedGrandTotal) ? 0 : calculatedGrandTotal
     };
   }, [watchedBasePrice, watchedPax, watchedAddons]);
 
@@ -657,7 +660,7 @@ export function TourPackageBookingForm({ initialBooking, products, onSuccess }: 
 
               {/* Addons Section */}
               <div className="md:col-span-2 space-y-4 border-t pt-6">
-                <h3 className="text-lg font-medium mb-2">Additional Costs</h3>
+                <h3 className="text-lg font-medium mb-2">Additional Costs (Fixed Amount)</h3>
                 <div className="space-y-2">
                   {addonFields.map((field, index) => (
                     <div key={field.id} className="flex items-center gap-2 p-2 border rounded-md">
@@ -739,15 +742,27 @@ export function TourPackageBookingForm({ initialBooking, products, onSuccess }: 
 
               {/* Totals Section */}
               <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6 border-t pt-6 mt-4">
-                <FormItem>
-                  <FormLabel>Total per Person</FormLabel>
-                  <Input
-                    readOnly
-                    disabled
-                    value={formatCurrency(totalPerPax)}
-                    className="disabled:cursor-default disabled:opacity-100 bg-muted/50 text-lg font-semibold"
-                  />
-                </FormItem>
+                <div className="space-y-4">
+                  <FormItem>
+                    <FormLabel>Base Subtotal ({watchedPax} PAX)</FormLabel>
+                    <Input
+                      readOnly
+                      disabled
+                      value={formatCurrency(baseSubtotal)}
+                      className="disabled:cursor-default disabled:opacity-100 bg-muted/50 text-lg font-semibold"
+                    />
+                  </FormItem>
+                  
+                  <FormItem>
+                    <FormLabel>Additional Costs (Fixed)</FormLabel>
+                    <Input
+                      readOnly
+                      disabled
+                      value={formatCurrency(addonsTotal)}
+                      className="disabled:cursor-default disabled:opacity-100 bg-muted/50 text-lg font-semibold"
+                    />
+                  </FormItem>
+                </div>
                 
                 <div>
                   <Label className="text-lg font-semibold">Grand Total</Label>
