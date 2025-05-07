@@ -136,6 +136,7 @@ export async function createTourPackageBooking(
       addons, // Pass the parsed addons array
       total_per_pax: totalPerPax,
       grand_total: grandTotal,
+      // Preserve dates exactly as submitted (already in ISO format with time set to noon)
       booking_date: booking_date?.toISOString(),
       travel_start_date: travel_start_date?.toISOString(),
       travel_end_date: travel_end_date?.toISOString(),
@@ -270,6 +271,7 @@ export async function updateTourPackageBooking(
       addons,
       total_per_pax: totalPerPax,
       grand_total: grandTotal,
+      // Preserve dates exactly as submitted (already in ISO format with time set to noon)
       booking_date: booking_date?.toISOString(),
       travel_start_date: travel_start_date?.toISOString(),
       travel_end_date: travel_end_date?.toISOString(),

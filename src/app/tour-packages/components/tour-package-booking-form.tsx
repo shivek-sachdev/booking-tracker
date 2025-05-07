@@ -276,7 +276,12 @@ export function TourPackageBookingForm({ initialBooking, products, onSuccess }: 
       if (key === 'addons') {
         formData.append(key, JSON.stringify(value ?? []));
       } else if (value instanceof Date) {
-        formData.append(key, value.toISOString());
+        // Fix timezone issues by setting time to noon and forcing the right date
+        const localDate = new Date(value);
+        localDate.setHours(12, 0, 0, 0);
+        // Format as YYYY-MM-DD to preserve the date exactly as selected
+        const dateStr = localDate.toISOString().split('T')[0];
+        formData.append(key, dateStr + 'T12:00:00.000Z');
       } else if (value !== null && value !== undefined) {
         formData.append(key, String(value));
       }
@@ -527,7 +532,15 @@ export function TourPackageBookingForm({ initialBooking, products, onSuccess }: 
                         <Calendar
                           mode="single"
                           selected={field.value ?? undefined}
-                          onSelect={field.onChange}
+                          onSelect={(date) => {
+                            if (date) {
+                              const selectedDate = new Date(date);
+                              selectedDate.setHours(12, 0, 0, 0);
+                              field.onChange(selectedDate);
+                            } else {
+                              field.onChange(undefined);
+                            }
+                          }}
                           initialFocus
                         />
                       </PopoverContent>
@@ -568,7 +581,15 @@ export function TourPackageBookingForm({ initialBooking, products, onSuccess }: 
                         <Calendar
                           mode="single"
                           selected={field.value ?? undefined}
-                          onSelect={field.onChange}
+                          onSelect={(date) => {
+                            if (date) {
+                              const selectedDate = new Date(date);
+                              selectedDate.setHours(12, 0, 0, 0);
+                              field.onChange(selectedDate);
+                            } else {
+                              field.onChange(undefined);
+                            }
+                          }}
                           disabled={(date) => {
                             const startDate = form.watch("travel_start_date");
                             return !!startDate && date < startDate;
