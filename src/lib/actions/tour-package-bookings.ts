@@ -530,7 +530,7 @@ export async function getTourPackageBookings(): Promise<TourPackageBookingWithPr
       linked_booking_id,
       tour_products ( name )
     `)
-    .order('created_at', { ascending: false })
+    .order('updated_at', { ascending: false })
     .order('booking_date', { ascending: false, nullsFirst: false });
 
   if (error) {

@@ -45,11 +45,11 @@ export default async function TasksPage() {
         <h2 className="text-3xl font-bold tracking-tight">Tasks Dashboard</h2>
         <div className="flex items-center space-x-2">
           <Button asChild size="sm">
-            <Link href="/tasks/new">
+          <Link href="/tasks/new">
               <Activity className="mr-2 h-4 w-4" />
               New Task
-            </Link>
-          </Button>
+          </Link>
+        </Button>
         </div>
       </div>
 
@@ -175,7 +175,7 @@ export default async function TasksPage() {
           </Card>
         </Link>
       </div>
-
+      
       {/* Bottom Section with Top Selling Packages and Recent Tasks */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
         {/* Top Selling Packages - Takes up more space */}
