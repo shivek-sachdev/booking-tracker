@@ -54,7 +54,7 @@ export function MainLayout({ children }: MainLayoutProps) {
 
   // Tour Package Navigation items
   const tourNavItems = [
-    { path: '/tasks', label: 'Tasks', icon: <ListTodo className="h-4 w-4" /> },
+    { path: '/tasks', label: 'Dashboard and Tasks', icon: <ListTodo className="h-4 w-4" /> },
     { path: '/tour-packages', label: 'Tour Bookings', icon: <ClipboardCheck className="h-4 w-4" /> },
     { path: '/tour-products', label: 'Tour Packages', icon: <Map className="h-4 w-4" /> },
   ];
