@@ -148,7 +148,11 @@ export function TasksTable({ initialTasks, showCompleted }: TasksTableProps) {
               return (
                 <TableRow key={task.id}>
                   <TableCell className="font-medium">{task.id}</TableCell>
-                  <TableCell>{task.description}</TableCell>
+                  <TableCell className={`${
+                    /[\u0E00-\u0E7F]/.test(task.description) ? 'thai-text' : ''
+                  }`}>
+                    {task.description}
+                  </TableCell>
                   <TableCell className="text-xs">
                     {task.linked_tour_booking_id && task.tour_package_bookings ? (
                        <Link 
@@ -208,7 +212,9 @@ export function TasksTable({ initialTasks, showCompleted }: TasksTableProps) {
                        <AlertDialogContent>
                          <AlertDialogHeader>
                            <AlertDialogTitle>Confirm Task Deletion</AlertDialogTitle>
-                           <AlertDialogDescription>
+                           <AlertDialogDescription className={`${
+                             /[\u0E00-\u0E7F]/.test(task.description) ? 'thai-text' : ''
+                           }`}>
                              Are you sure you want to delete Task #{task.id} ("{task.description.substring(0, 50)}...")? This action cannot be undone.
                            </AlertDialogDescription>
                          </AlertDialogHeader>

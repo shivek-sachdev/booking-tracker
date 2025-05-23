@@ -1046,5 +1046,5 @@ export async function getLinkedBookings(
   } catch (error) {
     console.error('Unexpected error fetching linked bookings:', error);
     return { linkedBookings: [], error: 'An unexpected error occurred.' };
-  }
+    }
 } 
