@@ -145,6 +145,17 @@ export interface TourPackageBooking extends Omit<z.infer<typeof TourPackageBooki
 export interface TourPackageBookingWithProduct extends TourPackageBooking {
   tour_products: { name: string } | null;
   linked_booking_pnr?: string | null;
+  linked_bookings?: LinkedBookingInfo[] | null;
+}
+
+// NEW: Interface for linked booking information
+export interface LinkedBookingInfo {
+  id: string; // booking_id (UUID)
+  booking_reference: string | null;
+  customer_name: string | null;
+  earliest_travel_date: string | null;
+  status: string | null;
+  created_at: string;
 }
 
 // --- NEW: Payment Record Type ---

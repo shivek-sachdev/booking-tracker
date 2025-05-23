@@ -55,4 +55,13 @@ export interface BookingSector {
 export interface CountResult {
   status: BookingStatus;
   count: number;
+}
+
+// Interface for tour package booking to booking relationship (many-to-many)
+export interface TourPackageBookingLinkedBooking {
+  id: string; // uuid
+  tour_package_booking_id: string; // varchar(5) - references tour_package_bookings.id
+  booking_id: string; // uuid - references bookings.id
+  created_at: string; // timestamp with time zone
+  updated_at: string; // timestamp with time zone
 } 

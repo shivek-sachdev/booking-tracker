@@ -20,6 +20,9 @@ import {
     getStatusVariant 
 } from '@/lib/utils/formatting';
 
+// Force dynamic rendering to prevent prerendering during build
+export const dynamic = 'force-dynamic';
+
 export default async function PaymentsLedgerPage() {
   const payments = await getAllPaymentRecords();
 

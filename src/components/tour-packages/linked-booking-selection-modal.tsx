@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Pagination,
   PaginationContent,
@@ -29,25 +30,25 @@ import {
   PaginationPrevious,
 } from '@/components/ui/pagination';
 import { getPaginatedBookingsForLinking, type LinkedBookingSelectItem } from '@/app/bookings/actions';
-import { useDebounce } from '@/hooks/use-debounce'; // Assuming you have or will create this hook
+import { useDebounce } from '@/hooks/use-debounce';
 import { format } from 'date-fns';
-import { Loader2, Search } from 'lucide-react';
+import { Loader2, Search, Check } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 interface LinkedBookingSelectionModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSelectBooking: (booking: LinkedBookingSelectItem) => void;
-  currentLinkedBookingId?: string | null;
+  onSelectBookings: (bookings: LinkedBookingSelectItem[]) => void;
+  currentLinkedBookingIds?: string[];
 }
 
-const PAGE_SIZE = 5; // Or any other suitable page size
+const PAGE_SIZE = 5;
 
 export function LinkedBookingSelectionModal({
   isOpen,
   onClose,
-  onSelectBooking,
-  currentLinkedBookingId,
+  onSelectBookings,
+  currentLinkedBookingIds = [],
 }: LinkedBookingSelectionModalProps) {
   const [bookings, setBookings] = React.useState<LinkedBookingSelectItem[]>([]);
   const [totalCount, setTotalCount] = React.useState(0);
@@ -55,8 +56,13 @@ export function LinkedBookingSelectionModal({
   const [searchTerm, setSearchTerm] = React.useState('');
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [selectedBookingIds, setSelectedBookingIds] = React.useState<string[]>(currentLinkedBookingIds);
 
   const debouncedSearchTerm = useDebounce(searchTerm, 500);
+
+  React.useEffect(() => {
+    setSelectedBookingIds(currentLinkedBookingIds);
+  }, [currentLinkedBookingIds]);
 
   const fetchBookings = React.useCallback(async () => {
     setIsLoading(true);
@@ -87,21 +93,44 @@ export function LinkedBookingSelectionModal({
     }
   }, [isOpen, fetchBookings]);
 
-  // Reset page to 1 when search term changes
   React.useEffect(() => {
     setCurrentPage(1);
   }, [debouncedSearchTerm]);
   
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
-  const handleSelectAndClose = (booking: LinkedBookingSelectItem) => {
-    onSelectBooking(booking);
+  const handleBookingToggle = (booking: LinkedBookingSelectItem, checked: boolean) => {
+    if (checked) {
+      setSelectedBookingIds(prev => [...prev.filter(id => id !== booking.id), booking.id]);
+    } else {
+      setSelectedBookingIds(prev => prev.filter(id => id !== booking.id));
+    }
+  };
+
+  const handleSelectAll = () => {
+    const currentPageBookingIds = bookings.map(booking => booking.id);
+    const allSelected = currentPageBookingIds.every(id => selectedBookingIds.includes(id));
+    
+    if (allSelected) {
+      setSelectedBookingIds(prev => prev.filter(id => !currentPageBookingIds.includes(id)));
+    } else {
+      setSelectedBookingIds(prev => [...new Set([...prev, ...currentPageBookingIds])]);
+    }
+  };
+
+  const handleConfirmSelection = () => {
+    const selectedBookings = bookings.filter(booking => selectedBookingIds.includes(booking.id));
+    onSelectBookings(selectedBookings);
     onClose();
   };
 
+  const isBookingSelected = (bookingId: string) => selectedBookingIds.includes(bookingId);
+  const currentPageBookingIds = bookings.map(booking => booking.id);
+  const areAllCurrentPageSelected = currentPageBookingIds.length > 0 && currentPageBookingIds.every(id => selectedBookingIds.includes(id));
+  const areSomeCurrentPageSelected = currentPageBookingIds.some(id => selectedBookingIds.includes(id));
+
   const renderPaginationItems = () => {
     const items = [];
-    // Always show first page
     items.push(
       <PaginationItem key="page-1">
         <PaginationLink
@@ -146,7 +175,6 @@ export function LinkedBookingSelectionModal({
       items.push(<PaginationEllipsis key="ellipsis-end" />);
     }
 
-    // Always show last page if more than 1 page
     if (totalPages > 1) {
       items.push(
         <PaginationItem key={`page-${totalPages}`}>
@@ -165,11 +193,11 @@ export function LinkedBookingSelectionModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-3xl">
+      <DialogContent className="sm:max-w-4xl">
         <DialogHeader>
-          <DialogTitle>Select Ticket Booking to Link</DialogTitle>
+          <DialogTitle>Select Ticket Bookings to Link</DialogTitle>
           <DialogDescription>
-            Search and select a ticket booking to link to this tour package.
+            Search and select ticket bookings to link to this tour package. You can select multiple bookings.
           </DialogDescription>
         </DialogHeader>
 
@@ -185,6 +213,14 @@ export function LinkedBookingSelectionModal({
             />
           </div>
         </div>
+
+        {selectedBookingIds.length > 0 && (
+          <div className="bg-muted/50 p-3 rounded-md">
+            <p className="text-sm text-muted-foreground">
+              {selectedBookingIds.length} booking{selectedBookingIds.length !== 1 ? 's' : ''} selected
+            </p>
+          </div>
+        )}
 
         {isLoading && (
           <div className="flex justify-center items-center h-40">
@@ -207,17 +243,36 @@ export function LinkedBookingSelectionModal({
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-12">
+                    <Checkbox
+                      checked={areAllCurrentPageSelected}
+                      onCheckedChange={handleSelectAll}
+                      ref={(el) => {
+                        if (el && el instanceof HTMLButtonElement) {
+                          (el as any).indeterminate = areSomeCurrentPageSelected && !areAllCurrentPageSelected;
+                        }
+                      }}
+                    />
+                  </TableHead>
                   <TableHead>Booking Ref</TableHead>
                   <TableHead>Customer</TableHead>
                   <TableHead>Travel Date</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Created</TableHead>
-                  <TableHead className="text-right">Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {bookings.map((booking) => (
-                  <TableRow key={booking.id} className={currentLinkedBookingId === booking.id ? 'bg-muted/50' : ''}>
+                  <TableRow 
+                    key={booking.id}
+                    className={isBookingSelected(booking.id) ? 'bg-muted/50' : ''}
+                  >
+                    <TableCell>
+                      <Checkbox
+                        checked={isBookingSelected(booking.id)}
+                        onCheckedChange={(checked) => handleBookingToggle(booking, checked === true)}
+                      />
+                    </TableCell>
                     <TableCell className="font-medium">{booking.booking_reference || 'N/A'}</TableCell>
                     <TableCell>{booking.customer_name || 'N/A'}</TableCell>
                     <TableCell>
@@ -225,18 +280,12 @@ export function LinkedBookingSelectionModal({
                         ? format(new Date(booking.earliest_travel_date), 'MMM d, yyyy')
                         : 'N/A'}
                     </TableCell>
-                    <TableCell><Badge variant={booking.status === 'Cancelled' ? 'destructive' : 'outline'}>{booking.status || 'N/A'}</Badge></TableCell>
-                    <TableCell>{format(new Date(booking.created_at), 'MMM d, yyyy')}</TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleSelectAndClose(booking)}
-                        disabled={currentLinkedBookingId === booking.id}
-                      >
-                        {currentLinkedBookingId === booking.id ? 'Selected' : 'Select'}
-                      </Button>
+                    <TableCell>
+                      <Badge variant={booking.status === 'Cancelled' ? 'destructive' : 'outline'}>
+                        {booking.status || 'N/A'}
+                      </Badge>
                     </TableCell>
+                    <TableCell>{format(new Date(booking.created_at), 'MMM d, yyyy')}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -273,6 +322,13 @@ export function LinkedBookingSelectionModal({
         <DialogFooter className="mt-6">
           <Button variant="outline" onClick={onClose}>
             Cancel
+          </Button>
+          <Button 
+            onClick={handleConfirmSelection}
+            disabled={selectedBookingIds.length === 0}
+          >
+            <Check className="mr-2 h-4 w-4" />
+            Link Selected ({selectedBookingIds.length})
           </Button>
         </DialogFooter>
       </DialogContent>

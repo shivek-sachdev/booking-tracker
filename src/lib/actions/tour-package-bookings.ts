@@ -1,14 +1,23 @@
 'use server';
 
+import { revalidatePath } from 'next/cache';
 import { createSimpleServerClient } from '@/lib/supabase/server';
 import { createClient } from '@supabase/supabase-js'; // <-- Import base client creator
-import { TourPackageBookingSchema, type TourPackageBooking, type TourProduct, type TourPackageBookingWithProduct, type PaymentRecord, TourPackageStatusEnum } from '@/lib/types/tours';
-import { revalidatePath } from 'next/cache';
+import { 
+  TourPackageBookingSchema, 
+  type TourPackageBooking, 
+  type TourProduct, 
+  type TourPackageBookingWithProduct, 
+  type PaymentRecord, 
+  TourPackageStatusEnum,
+  type LinkedBookingInfo 
+} from '@/lib/types/tours';
 import crypto from 'crypto'; // Import crypto for random bytes
 import { z } from 'zod';
 import { Mistral } from '@mistralai/mistralai'; // <-- Import Mistral
 import path from 'path'; // Import path for getting extension
 // import { toast } from 'react-hot-toast'; // <-- REMOVE: Cannot use client-side toast in server action
+// import type { FormState } from '@/app/tour-packages/components/tour-package-booking-form'; // REMOVED: Interface exists in file
 
 // --- Helper Type for Action State ---
 interface FormState {
@@ -566,11 +575,14 @@ export async function getTourPackageBookingById(id: string): Promise<TourPackage
     return null; 
   }
 
-  // Step 2: If linked_booking_id exists, fetch the corresponding booking reference
+  // Step 2: Fetch linked bookings from the new many-to-many table
+  const { linkedBookings, error: linkedBookingsError } = await getLinkedBookings(id);
+  
+  // Step 3: Handle backwards compatibility with old linked_booking_id field
   let linkedPnr: string | null = null;
   const bookingDataAsAny = bookingData as any; 
-  if (bookingDataAsAny?.linked_booking_id) { 
-    console.log(`[getTourPackageBookingById] Found linked_booking_id: ${bookingDataAsAny.linked_booking_id}. Fetching PNR...`); // Log: Attempting fetch
+  if (bookingDataAsAny?.linked_booking_id && linkedBookings.length === 0) { 
+    console.log(`[getTourPackageBookingById] Found old linked_booking_id: ${bookingDataAsAny.linked_booking_id}. Fetching PNR for backwards compatibility...`);
     const { data: linkedBookingData, error: linkedBookingError } = await supabase
       .from('bookings')
       .select('booking_reference')
@@ -578,24 +590,21 @@ export async function getTourPackageBookingById(id: string): Promise<TourPackage
       .maybeSingle(); 
       
     if (linkedBookingError) {
-      console.error(`[getTourPackageBookingById] Error fetching linked booking reference for tour ${id}:`, linkedBookingError);
+      console.error(`[getTourPackageBookingById] Error fetching old linked booking reference for tour ${id}:`, linkedBookingError);
     } else if (linkedBookingData) {
       linkedPnr = linkedBookingData.booking_reference;
-      console.log(`[getTourPackageBookingById] Successfully fetched linked PNR: ${linkedPnr}`); // Log: Success
-    } else {
-      console.log(`[getTourPackageBookingById] Linked booking ID ${bookingDataAsAny.linked_booking_id} found, but no matching booking record in 'bookings' table.`); // Log: Linked booking not found
+      console.log(`[getTourPackageBookingById] Successfully fetched old linked PNR: ${linkedPnr}`);
     }
-  } else {
-      console.log(`[getTourPackageBookingById] No linked_booking_id found for tour ${id}.`); // Log: No link
   }
 
-  // Step 3: Combine the data and add the linked PNR
+  // Step 4: Combine the data and add the linked bookings
   const result: TourPackageBookingWithProduct = {
     ...(bookingData as unknown as TourPackageBookingWithProduct), 
-    linked_booking_pnr: linkedPnr,
+    linked_booking_pnr: linkedPnr, // Keep for backwards compatibility
+    linked_bookings: linkedBookingsError ? [] : linkedBookings, // New field with multiple bookings
   };
   
-  console.log(`[getTourPackageBookingById] Returning final object for tour ${id}:`, result); // Log: Final result
+  console.log(`[getTourPackageBookingById] Returning final object for tour ${id} with ${linkedBookings.length} linked bookings`);
 
   return result;
 }
@@ -661,10 +670,16 @@ export async function createPaymentSlipSignedUrl(
 import type { PaymentLedgerItem } from '@/lib/types/tours';
 
 export async function getAllPaymentRecords(): Promise<PaymentLedgerItem[]> {
+    // Check if environment variables are available
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+        // Return empty array silently - this is expected during development
+        return [];
+    }
+
     // Use service role to ensure we can join across tables even if RLS is on them
     const supabaseAdmin = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!,
+        process.env.NEXT_PUBLIC_SUPABASE_URL,
+        process.env.SUPABASE_SERVICE_ROLE_KEY,
         { auth: { autoRefreshToken: false, persistSession: false } }
     );
 
@@ -914,4 +929,122 @@ export async function verifyPaymentSlip(
         }
         return { success: false, message: error.message || "An unexpected error occurred during verification." };
     }
+}
+
+// NEW: Functions for managing multiple linked bookings
+
+// Add a linked booking to a tour package booking
+export async function addLinkedBooking(
+  tourPackageBookingId: string,
+  bookingId: string
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = createSimpleServerClient();
+
+  try {
+    const { error } = await supabase
+      .from('tour_package_booking_linked_bookings')
+      .insert({
+        tour_package_booking_id: tourPackageBookingId,
+        booking_id: bookingId,
+      });
+
+    if (error) {
+      console.error('Error adding linked booking:', error);
+      if (error.code === '23505') {
+        return { success: false, error: 'This booking is already linked to this tour package.' };
+      }
+      return { success: false, error: error.message };
+    }
+
+    revalidatePath('/tour-packages');
+    revalidatePath(`/tour-packages/${tourPackageBookingId}`);
+    return { success: true };
+  } catch (error) {
+    console.error('Unexpected error adding linked booking:', error);
+    return { success: false, error: 'An unexpected error occurred.' };
+  }
+}
+
+// Remove a linked booking from a tour package booking
+export async function removeLinkedBooking(
+  tourPackageBookingId: string,
+  bookingId: string
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = createSimpleServerClient();
+
+  try {
+    const { error } = await supabase
+      .from('tour_package_booking_linked_bookings')
+      .delete()
+      .eq('tour_package_booking_id', tourPackageBookingId)
+      .eq('booking_id', bookingId);
+
+    if (error) {
+      console.error('Error removing linked booking:', error);
+      return { success: false, error: error.message };
+    }
+
+    revalidatePath('/tour-packages');
+    revalidatePath(`/tour-packages/${tourPackageBookingId}`);
+    return { success: true };
+  } catch (error) {
+    console.error('Unexpected error removing linked booking:', error);
+    return { success: false, error: 'An unexpected error occurred.' };
+  }
+}
+
+// Get all linked bookings for a tour package booking
+export async function getLinkedBookings(
+  tourPackageBookingId: string
+): Promise<{ linkedBookings: LinkedBookingInfo[]; error?: string }> {
+  const supabase = createSimpleServerClient();
+
+  try {
+    const { data, error } = await supabase
+      .from('tour_package_booking_linked_bookings')
+      .select(`
+        booking_id,
+        bookings (
+          id,
+          booking_reference,
+          created_at,
+          status,
+          customers ( company_name ),
+          booking_sectors (
+            travel_date
+          )
+        )
+      `)
+      .eq('tour_package_booking_id', tourPackageBookingId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching linked bookings:', error);
+      return { linkedBookings: [], error: error.message };
+    }
+
+    // Transform the data to match LinkedBookingInfo interface
+    const linkedBookings: LinkedBookingInfo[] = data.map((item: any) => {
+      const booking = item.bookings;
+      // Find earliest travel date from booking sectors
+      const earliestTravelDate = booking.booking_sectors
+        ?.map((sector: any) => sector.travel_date)
+        .filter(Boolean)
+        .sort()[0] || null;
+
+      return {
+        id: booking.id,
+        booking_reference: booking.booking_reference,
+        customer_name: booking.customers?.company_name || null,
+        earliest_travel_date: earliestTravelDate,
+        status: booking.status,
+        created_at: booking.created_at,
+      };
+    });
+
+    return { linkedBookings };
+  } catch (error) {
+    console.error('Unexpected error fetching linked bookings:', error);
+    return { linkedBookings: [], error: 'An unexpected error occurred.' };
+  }
 } 

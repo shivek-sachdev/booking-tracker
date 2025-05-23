@@ -57,7 +57,7 @@ interface TourPackageDetailPageProps {
 const DetailItem = ({ label, value }: { label: string; value: React.ReactNode }) => (
     <div className="mb-2">
         <p className="text-sm font-medium text-muted-foreground">{label}</p>
-        <p className="text-sm">{value || '-'}</p>
+        <div className="text-sm">{value || '-'}</div>
     </div>
 );
 
@@ -150,8 +150,37 @@ export default async function TourPackageDetailPage({ params }: TourPackageDetai
                              {booking.status}
                          </Badge>
                      } />
-                     {/* Add Linked PNR Display */}
-                     <DetailItem label="Linked Ticket Booking PNR" value={booking.linked_booking_pnr || 'N/A'} />
+                     {/* Add Linked Bookings Display */}
+                     <DetailItem 
+                       label="Linked Ticket Bookings" 
+                       value={
+                         <div className="space-y-1">
+                           {booking.linked_bookings && booking.linked_bookings.length > 0 ? (
+                             booking.linked_bookings.map((linkedBooking) => (
+                               <div key={linkedBooking.id} className="flex items-center justify-between p-2 border rounded-md bg-muted/50 text-sm">
+                                 <div>
+                                   <span className="font-medium">{linkedBooking.booking_reference || 'N/A'}</span>
+                                   {linkedBooking.customer_name && (
+                                     <span className="text-muted-foreground ml-2">({linkedBooking.customer_name})</span>
+                                   )}
+                                 </div>
+                                 <Badge variant="outline" className="text-xs">
+                                   {linkedBooking.status || 'N/A'}
+                                 </Badge>
+                               </div>
+                             ))
+                           ) : booking.linked_booking_pnr ? (
+                             // Backwards compatibility: show old single PNR if it exists and no new linked bookings
+                             <div className="p-2 border rounded-md bg-muted/50 text-sm">
+                               <span className="font-medium">{booking.linked_booking_pnr}</span>
+                               <span className="text-muted-foreground ml-2">(Legacy Link)</span>
+                             </div>
+                           ) : (
+                             <span className="text-muted-foreground italic">No bookings linked</span>
+                           )}
+                         </div>
+                       } 
+                     />
                  </div>
                  {/* Right Column */}
                  <div>

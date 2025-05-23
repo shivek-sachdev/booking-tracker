@@ -42,6 +42,9 @@ import {
   createPaymentSlipSignedUrl,
   getPaymentsForBooking,
   deletePaymentRecord,
+  addLinkedBooking,
+  removeLinkedBooking,
+  getLinkedBookings
 } from '@/lib/actions/tour-package-bookings'
 import { useForm, useFieldArray } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -58,6 +61,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Label } from "@/components/ui/label";
 import { LinkedBookingSelectionModal } from "@/components/tour-packages/linked-booking-selection-modal";
 import type { LinkedBookingSelectItem, getBookingReferenceById as fetchBookingRefById } from "@/app/bookings/actions";
+import type { LinkedBookingInfo } from "@/lib/types/tours";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -116,8 +120,8 @@ export function TourPackageBookingForm({ initialBooking, products, onSuccess }: 
   const [newAddon, setNewAddon] = React.useState({ name: '', amount: '' });
 
   const [isLinkedBookingModalOpen, setIsLinkedBookingModalOpen] = React.useState(false);
-  const [selectedLinkedBookingRef, setSelectedLinkedBookingRef] = React.useState<string | null>(null);
-  const [isFetchingInitialRef, setIsFetchingInitialRef] = React.useState(false);
+  const [linkedBookings, setLinkedBookings] = React.useState<LinkedBookingInfo[]>([]);
+  const [isLoadingLinkedBookings, setIsLoadingLinkedBookings] = React.useState(false);
 
   // State for payment history
   const [existingPayments, setExistingPayments] = React.useState<PaymentRecord[]>([]);
@@ -147,33 +151,36 @@ export function TourPackageBookingForm({ initialBooking, products, onSuccess }: 
     }
   }, [initialBooking?.id]);
 
-  // useEffect to fetch PNR for initial linked booking
+  // useEffect to fetch linked bookings for initial data
   React.useEffect(() => {
-    const fetchInitialReference = async () => {
-      if (initialBooking?.linked_booking_id) {
-        setIsFetchingInitialRef(true);
+    const fetchLinkedBookings = async () => {
+      if (initialBooking?.id) {
+        setIsLoadingLinkedBookings(true);
         try {
-          // Dynamically import the server action
-          const { getBookingReferenceById } = await import('@/app/bookings/actions');
-          const pnr = await getBookingReferenceById(initialBooking.linked_booking_id);
-          setSelectedLinkedBookingRef(pnr); // Store PNR if fetched, or null if not found
+          const { linkedBookings: fetchedBookings, error } = await getLinkedBookings(initialBooking.id);
+          if (error) {
+            console.error("Failed to fetch linked bookings:", error);
+            setLinkedBookings([]);
+          } else {
+            setLinkedBookings(fetchedBookings);
+          }
         } catch (error) {
-          console.error("Failed to fetch initial linked booking reference:", error);
-          setSelectedLinkedBookingRef(null); // Fallback if fetch fails
+          console.error("Failed to fetch linked bookings:", error);
+          setLinkedBookings([]);
         }
-        setIsFetchingInitialRef(false);
+        setIsLoadingLinkedBookings(false);
       } else {
-        setSelectedLinkedBookingRef(null); // Clear if no booking is linked initially
+        setLinkedBookings([]);
       }
     };
 
     if (isEditing) { // Only run for existing bookings
-        fetchInitialReference();
+        fetchLinkedBookings();
         doFetchBookingPayments(); // Fetch payments when editing
     } else {
         setIsLoadingPayments(false); // Not editing, so not loading payments initially
     }
-  }, [initialBooking?.linked_booking_id, isEditing, doFetchBookingPayments]); // Added doFetchBookingPayments
+  }, [initialBooking?.id, isEditing, doFetchBookingPayments]);
 
   const form = useForm<TourPackageBookingFormValues>({
     resolver: zodResolver(TourPackageBookingSchema),
@@ -381,16 +388,67 @@ export function TourPackageBookingForm({ initialBooking, products, onSuccess }: 
     }
   };
 
-  const handleSelectLinkedBooking = (booking: LinkedBookingSelectItem) => {
-    form.setValue('linked_booking_id', booking.id, { shouldValidate: true, shouldDirty: true });
-    setSelectedLinkedBookingRef(booking.booking_reference);
-    setIsLinkedBookingModalOpen(false);
+  const handleSelectLinkedBookings = async (bookings: LinkedBookingSelectItem[]) => {
+    if (!initialBooking?.id) {
+      toast.error("Cannot link bookings: Tour booking ID not found");
+      return;
+    }
+
+    setIsLoadingLinkedBookings(true);
+    
+    try {
+      // Add each selected booking
+      for (const booking of bookings) {
+        const result = await addLinkedBooking(initialBooking.id, booking.id);
+        if (!result.success) {
+          toast.error(`Failed to link ${booking.booking_reference}: ${result.error}`);
+        }
+      }
+      
+      // Refresh the linked bookings list
+      const { linkedBookings: updatedBookings, error } = await getLinkedBookings(initialBooking.id);
+      if (error) {
+        toast.error("Failed to refresh linked bookings");
+      } else {
+        setLinkedBookings(updatedBookings);
+        toast.success(`Successfully linked ${bookings.length} booking${bookings.length !== 1 ? 's' : ''}`);
+      }
+    } catch (error) {
+      console.error("Error linking bookings:", error);
+      toast.error("An unexpected error occurred while linking bookings");
+    }
+    
+    setIsLoadingLinkedBookings(false);
   };
 
-  const handleClearLinkedBooking = () => {
-    form.setValue('linked_booking_id', null, { shouldValidate: true, shouldDirty: true });
-    setSelectedLinkedBookingRef(null);
-    setIsLinkedBookingModalOpen(false);
+  const handleRemoveLinkedBooking = async (bookingId: string) => {
+    if (!initialBooking?.id) {
+      toast.error("Cannot remove booking: Tour booking ID not found");
+      return;
+    }
+
+    setIsLoadingLinkedBookings(true);
+    
+    try {
+      const result = await removeLinkedBooking(initialBooking.id, bookingId);
+      if (result.success) {
+        // Refresh the linked bookings list
+        const { linkedBookings: updatedBookings, error } = await getLinkedBookings(initialBooking.id);
+        if (error) {
+          toast.error("Failed to refresh linked bookings");
+        } else {
+          setLinkedBookings(updatedBookings);
+          toast.success("Successfully removed linked booking");
+        }
+      } else {
+        toast.error(`Failed to remove linked booking: ${result.error}`);
+      }
+    } catch (error) {
+      console.error("Error removing linked booking:", error);
+      toast.error("An unexpected error occurred while removing the linked booking");
+    }
+    
+    setIsLoadingLinkedBookings(false);
   };
   
   const handleViewExistingSlip = async (slipPath: string | undefined) => {
@@ -825,35 +883,54 @@ export function TourPackageBookingForm({ initialBooking, products, onSuccess }: 
 
                 {watchedStatus !== 'Open' && (
                   <FormItem>
-                    <FormLabel>Linked Ticket Booking</FormLabel>
-                    <div className="flex items-center gap-2 mt-1">
-                      {form.getValues("linked_booking_id") ? (
-                        <div className="flex-grow p-2 border rounded-md bg-muted/50 dark:bg-slate-800/50 text-sm flex justify-between items-center min-h-[38px]">
-                          {isFetchingInitialRef ? (
-                            <span className="text-muted-foreground"><Loader2 className="inline-block mr-2 h-3 w-3 animate-spin" />Loading PNR...</span>
-                          ) : selectedLinkedBookingRef ? (
-                            <span>{selectedLinkedBookingRef}</span>
-                          ) : form.getValues("linked_booking_id") ? (
-                            <span>Ref ID: {form.getValues("linked_booking_id")!.substring(0, 8)}...</span>
-                          ) : (
-                            <span className="text-muted-foreground">Not Linked</span>
-                          )}
-                          <Button variant="ghost" size="icon" onClick={handleClearLinkedBooking} className="h-6 w-6" disabled={isFetchingInitialRef}>
-                            <XCircleIcon className="h-4 w-4 text-muted-foreground hover:text-destructive" />
-                          </Button>
+                    <FormLabel>Linked Ticket Bookings</FormLabel>
+                    <div className="space-y-2">
+                      {isLoadingLinkedBookings ? (
+                        <div className="p-2 border rounded-md bg-muted/50 text-sm flex items-center">
+                          <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                          <span className="text-muted-foreground">Loading linked bookings...</span>
+                        </div>
+                      ) : linkedBookings.length > 0 ? (
+                        <div className="space-y-1">
+                          {linkedBookings.map((booking) => (
+                            <div key={booking.id} className="flex items-center justify-between p-2 border rounded-md bg-muted/50 text-sm">
+                              <div>
+                                <span className="font-medium">{booking.booking_reference || 'N/A'}</span>
+                                {booking.customer_name && (
+                                  <span className="text-muted-foreground ml-2">({booking.customer_name})</span>
+                                )}
+                              </div>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleRemoveLinkedBooking(booking.id)}
+                                className="h-6 w-6"
+                                disabled={isLoadingLinkedBookings}
+                              >
+                                <XCircleIcon className="h-4 w-4 text-muted-foreground hover:text-destructive" />
+                              </Button>
+                            </div>
+                          ))}
                         </div>
                       ) : (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => setIsLinkedBookingModalOpen(true)}
-                          className="w-full"
-                        >
-                          <LinkIcon className="mr-2 h-4 w-4" /> Select Ticket Booking
-                        </Button>
+                        <div className="p-2 border rounded-md bg-muted/50 text-sm text-muted-foreground">
+                          No bookings linked
+                        </div>
                       )}
+                      
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setIsLinkedBookingModalOpen(true)}
+                        className="w-full"
+                        disabled={!isEditing || isLoadingLinkedBookings}
+                      >
+                        <LinkIcon className="mr-2 h-4 w-4" />
+                        {linkedBookings.length > 0 ? 'Add More Bookings' : 'Link Ticket Bookings'}
+                      </Button>
                     </div>
-                    <FormMessage>{form.formState.errors.linked_booking_id?.message}</FormMessage>
+                    <FormMessage />
                   </FormItem>
                 )}
               </div>
@@ -993,8 +1070,8 @@ export function TourPackageBookingForm({ initialBooking, products, onSuccess }: 
       <LinkedBookingSelectionModal
         isOpen={isLinkedBookingModalOpen}
         onClose={() => setIsLinkedBookingModalOpen(false)}
-        onSelectBooking={handleSelectLinkedBooking}
-        currentLinkedBookingId={form.getValues("linked_booking_id")}
+        onSelectBookings={handleSelectLinkedBookings}
+        currentLinkedBookingIds={linkedBookings.map(b => b.id)}
       />
     </>
   );
