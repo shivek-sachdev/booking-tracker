@@ -1,9 +1,15 @@
-# Tasks Dashboard
+# Dashboard and Tasks - Separated Views
 
 ## Overview
-Tasks Dashboard เป็น Dashboard หลักที่รวบรวมข้อมูลสำคัญของระบบ Booking Tracker ไว้ในหน้าเดียว โดยมีการแสดงข้อมูลในรูปแบบที่เข้าใจง่ายและใช้งานสะดวก โดย**ใช้ข้อมูลจริงจากฐานข้อมูลทั้งหมด** (ยกเว้น Recent Tasks ที่ยังเป็น mock data)
+Dashboard และ Tasks ได้ถูกแยกออกเป็น 2 หน้าแยกกันเพื่อการใช้งานที่ชัดเจนและมีประสิทธิภาพมากขึ้น:
 
-## Features
+### Dashboard (`/dashboard`)
+หน้า Dashboard หลักที่รวบรวมข้อมูลสำคัญของระบบ Booking Tracker ไว้ในหน้าเดียว โดยมีการแสดงข้อมูลในรูปแบบที่เข้าใจง่ายและใช้งานสะดวก โดย**ใช้ข้อมูลจริงจากฐานข้อมูลทั้งหมด**
+
+### Tasks (`/tasks`)  
+หน้า Tasks ที่เน้นการจัดการ Task เท่านั้น โดยแสดง Recent Tasks และให้การเข้าถึง Task functions ต่างๆ
+
+## Dashboard Features (`/dashboard`)
 
 ### 📊 Stats Summary (Real Database Data)
 แสดงสถิติโดยรวมของธุรกิจใน 4 หมวดหลัก จากข้อมูลจริง:
@@ -49,17 +55,62 @@ Tasks Dashboard เป็น Dashboard หลักที่รวบรวม�
 - **Progress Visualization**: แสดงความนิยมสัมพัทธ์ด้วย progress bar
 - **Smart Destination Detection**: ดึงจุดหมายปลายทางจากชื่อแพ็คเกจหรือคำอธิบาย
 
-### 📝 Recent Tasks (Mock Data)
-แสดงรายการ Task ล่าสุด 5 รายการ พร้อม:
-- ชื่อและรายละเอียดของ Task
-- Badge แสดงระดับความสำคัญ (Priority)
-- Badge แสดงสถานะ (Status)
-- ปุ่ม "View All Tasks" เพื่อดู Task ทั้งหมด
-- **หมายเหตุ**: ยังใช้ mock data เพราะยังไม่มีตาราง tasks
+## Tasks Features (`/tasks`)
+
+### 📋 All Tasks Table (Real Data)
+แสดงรายการ Task ทั้งหมดในรูปแบบตารางพร้อม:
+- **Task ID** และ **Description**
+- **Linked Booking** - ข้อมูลการเชื่อมโยงกับ Tour Booking
+- **Status** - Badge แสดงสถานะของ Task
+- **Due Date** - วันที่ครบกำหนด
+- **Actions** - ปุ่มสำหรับ Edit และ Delete Task
+- **Filtering Options** - แสดง/ซ่อน completed tasks
+- **Sorting** - เรียงลำดับตาม due date
+- **Search** - ค้นหา tasks ตามคำอธิบาย
+
+### 🎯 Task Management Features
+- **Table-based Layout**: แสดง Tasks ในรูปแบบตารางที่ครอบคลุมและจัดระเบียบ
+- **Complete Task Information**: แสดงข้อมูลครบถ้วนในมุมมองเดียว
+- **Advanced Actions**: Edit, Delete และ Mark as Complete ได้โดยตรง
+- **Responsive Design**: ปรับขนาดตามหน้าจอและอุปกรณ์
+- **Real-time Updates**: ข้อมูลอัปเดตทันทีเมื่อมีการเปลี่ยนแปลง
+
+## Navigation Structure
+
+### หน้าหลัก
+- `/dashboard` - Dashboard หลักพร้อม analytics และ overview
+- `/tasks` - หน้าจัดการ Tasks เฉพาะ
+
+### หน้าย่อย Tasks
+- `/tasks/new` - สร้าง Task ใหม่
+- `/tasks/[id]` - ดูรายละเอียด Task
+- `/tasks/[id]/edit` - แก้ไข Task
+
+### หน้าที่เชื่อมโยง
+- `/tour-packages` - จัดการการจองทัวร์
+- `/tour-products` - จัดการแพ็คเกจทัวร์
+- `/payments` - จัดการการชำระเงิน
+- `/customers/new` - เพิ่มลูกค้าใหม่
+
+## Components Structure
+
+### Dashboard Components
+- `src/app/dashboard/page.tsx` - หน้า Dashboard หลัก (ใช้ข้อมูลจริง)
+- `src/components/tasks/stats-summary.tsx` - Stats Summary component (async server component, real data)
+- `src/components/tasks/top-selling-packages.tsx` - Top Selling Packages component (async server component, real data)
+
+### Tasks Components
+- `src/app/tasks/page.tsx` - หน้า Tasks หลัก (All Tasks Table)
+- `src/components/tasks/tasks-display-controls.tsx` - ตาราง Tasks พร้อม filtering และ controls
+- `src/components/tasks/tasks-table.tsx` - ตาราง Tasks core component
+- `src/components/tasks/task-form.tsx` - Form สำหรับสร้าง/แก้ไข Tasks
+
+### Navigation Components
+- `src/components/layout/main-layout.tsx` - Updated navigation with separate Dashboard and Tasks menu items
 
 ## Data Sources
 
-### Real Database Integration
+### Dashboard Data (Real Database Integration)
 Dashboard ดึงข้อมูลจากตารางในฐานข้อมูลจริง:
 
 #### Dashboard Stats Data
@@ -107,6 +158,19 @@ SELECT
 FROM tour_package_bookings
 ```
 
+### Tasks Data (Real Database Integration)
+Tasks หน้าดึงข้อมูลจากตาราง tasks ที่มีอยู่:
+
+```sql
+-- Recent Tasks ดึงข้อมูลจาก:
+SELECT t.*, tpb.customer_name, tp.name as package_name
+FROM tasks t
+LEFT JOIN tour_package_bookings tpb ON t.linked_tour_booking_id = tpb.id
+LEFT JOIN tour_products tp ON tpb.tour_product_id = tp.id
+ORDER BY t.created_at DESC
+LIMIT 8
+```
+
 #### การคำนวณที่ใช้:
 - **Total Revenue**: รวม `grand_total` ทั้งหมด
 - **Active Bookings**: นับสถานะ Open, Negotiating, Paid
@@ -118,107 +182,82 @@ FROM tour_package_bookings
 - **Progress Value**: คำนวณเป็นเปอร์เซ็นต์เทียบกับแพ็คเกจอันดับ 1
 - **Rating Calculation**: `4.0 + (sales / 100) * 0.8` (max 5.0)
 
-## Navigation
+## API Integration
 
-### หน้าหลัก
-- `/tasks` - Tasks Dashboard (หน้านี้)
+### Dashboard API Actions
+- `getDashboardStats()` - ดึงข้อมูล dashboard stats จากฐานข้อมูลจริง
+- `getTourBookingsStats()` - ดึงข้อมูล tour bookings stats จากฐานข้อมูลจริง
+- `getTourPackagesStats()` - ดึงข้อมูล tour packages stats จากฐานข้อมูลจริง
+- `getPaymentsStats()` - ดึงข้อมูล payments stats จากฐานข้อมูลจริง
+- `getTopSellingPackages()` - ดึงข้อมูล Top Selling Packages จากฐานข้อมูลจริง
 
-### หน้าย่อย
-- `/tasks/all` - รายการ Task ทั้งหมด
-- `/tasks/new` - สร้าง Task ใหม่
-- `/tasks/[id]` - ดูรายละเอียด Task
+### Tasks API Actions
+- `getTasks()` - ดึงข้อมูล tasks จากฐานข้อมูล
+- `createTask()` - สร้าง task ใหม่
+- `updateTask()` - อัปเดต task
+- `deleteTask()` - ลบ task
+- `getPaginatedTourBookingsForLinking()` - ดึงข้อมูล tour bookings สำหรับการ link กับ task
 
-### หน้าที่เชื่อมโยง
-- `/tour-packages` - จัดการการจองทัวร์
-- `/tour-products` - จัดการแพ็คเกจทัวร์
-- `/payments` - จัดการการชำระเงิน
-- `/customers/new` - เพิ่มลูกค้าใหม่
-- `/reports` - รายงาน
-- `/calendar` - ปฏิทินทัวร์
+## Performance Features
 
-## Components
+### Server-Side Rendering
+- ทุก component เป็น async server component
+- ข้อมูลถูก fetch ที่ server ก่อนส่งไปยัง client
+- ลดเวลา loading และปรับปรุง SEO
 
-### Main Components
-- `src/app/tasks/page.tsx` - หน้า Tasks Dashboard หลัก (ใช้ข้อมูลจริง)
-- `src/app/tasks/all/page.tsx` - หน้ารายการ Task ทั้งหมด
+### Database Optimization
+- ใช้ JOIN query เพื่อดึงข้อมูล tour_products พร้อมกับ bookings
+- Sort และ filter ที่ระดับฐานข้อมูล
+- Limit ผลลัพธ์เพื่อประสิทธิภาพ
+- การคำนวณที่เหมาะสมเพื่อลด database load
 
-### Sub Components
-- `src/components/tasks/top-selling-packages.tsx` - Top Selling Packages component (async server component, real data)
-- `src/components/tasks/stats-summary.tsx` - Stats Summary component (async server component, real data)
-- `src/components/tasks/tasks-display-controls.tsx` - ตารางแสดง Task (ใช้ในหน้า /tasks/all)
+## Benefits of Separation
 
-### Database Actions
-- `src/lib/actions/dashboard-stats.ts` - ฟังก์ชันใหม่สำหรับ dashboard statistics
-  - `getDashboardStats()` - ดึงข้อมูล stats summary
-  - `getTourBookingsStats()` - ดึงข้อมูล tour bookings
-  - `getTourPackagesStats()` - ดึงข้อมูล tour packages  
-  - `getPaymentsStats()` - ดึงข้อมูล payments
-- `src/lib/actions/tour-products.ts` - ฟังก์ชัน `getTopSellingPackages()` เพื่อดึงข้อมูลการขาย
+### ✅ Dashboard Benefits
+- **Focus on Analytics**: เน้นการแสดงข้อมูลและสถิติ
+- **Business Overview**: มุมมองภาพรวมของธุรกิจ
+- **Quick Access**: ปุ่ม Quick Booking สำหรับการจองด่วน
+- **Performance Metrics**: ข้อมูลสำคัญสำหรับการตัดสินใจ
 
-## Design Features
+### ✅ Tasks Benefits
+- **Task-Focused**: เน้นการจัดการ tasks เท่านั้น
+- **Better UX**: การแสดงผลที่เหมาะสมสำหรับ task management
+- **Enhanced Information**: แสดงข้อมูล linked bookings ชัดเจนขึ้น
+- **Improved Navigation**: การนำทางที่ชัดเจนระหว่าง task functions
 
-### Responsive Design
-- Mobile-first approach
-- Grid layout ปรับตามขนาดหน้าจอ
-- Touch-friendly interface
+### ✅ Navigation Benefits
+- **Clear Separation**: แยกหน้าที่ของแต่ละส่วนชัดเจน
+- **Logical Flow**: ผู้ใช้เข้าใจได้ง่ายว่าจะหาอะไรที่ไหน
+- **Reduced Clutter**: หน้าแต่ละหน้าไม่ซับซ้อนเกินไป
 
-### Interactive Elements
-- Hover effects บน cards และปุ่ม
-- Smooth transitions
-- Arrow animations เมื่อ hover
-- Progress bars แสดงความนิยม
-- Real-time data updates
+## Interface Updates
 
-### Color Coding
-- 🟢 สีเขียว: สถานะดี, เพิ่มขึ้น
-- 🟡 สีเหลือง: สถานะรอดำเนินการ, rating stars
-- 🔴 สีแดง: สถานะยกเลิก, ลดลง
-- 🔵 สีน้ำเงิน: ข้อมูลหลัก
-- 👑 สีทอง: แพ็คเกจอันดับ 1
-
-## Data Structure
-
-### Real Database Schema
-ใช้ข้อมูลจริงจากฐานข้อมูล Supabase:
-
-#### Dashboard Stats Interface
+### Dashboard Interface
 ```typescript
+// Dashboard components maintain same interfaces
 export interface DashboardStats {
-  totalRevenue: number;        // จาก grand_total
-  revenueChange: string;       // เปอร์เซ็นต์เพิ่มขึ้น
-  activeBookings: number;      // นับสถานะ active
-  bookingsChange: string;      // เปอร์เซ็นต์เพิ่มขึ้น
-  totalCustomers: number;      // นับลูกค้าไม่ซ้ำ
-  customersChange: string;     // เปอร์เซ็นต์เพิ่มขึ้น
-  completionRate: number;      // อัตราส่วน Complete
-  completionChange: string;    // เปอร์เซ็นต์เพิ่มขึ้น
+  totalRevenue: number;
+  activeBookings: number;
+  totalCustomers: number;
+  completionRate: number;
 }
-```
 
-#### Tour Bookings Stats Interface
-```typescript
 export interface TourBookingsStats {
-  total: number;               // จำนวนรวม
-  confirmed: number;           // สถานะ confirmed
-  pending: number;             // สถานะ pending  
-  cancelled: number;           // สถานะ cancelled
-  change: string;              // เปอร์เซ็นต์เพิ่มขึ้น
+  total: number;
+  confirmed: number;
+  pending: number;
+  cancelled: number;
+  change: string;
 }
-```
 
-#### Tour Packages Stats Interface
-```typescript
 export interface TourPackagesStats {
-  total: number;               // จำนวนแพ็คเกจรวม
-  active: number;              // แพ็คเกจที่มีการจอง
-  draft: number;               // แพ็คเกจที่ไม่มีการจอง
-  archived: number;            // แพ็คเกจที่ถูก archive
-  change: string;              // เปอร์เซ็นต์เพิ่มขึ้น
+  total: number;
+  active: number;
+  draft: number;
+  archived: number;
+  change: string;
 }
-```
 
-#### Payments Stats Interface
-```typescript
 export interface PaymentsStats {
   total: string;               // ยอดรวม formatted
   completed: string;           // ยอดที่ชำระแล้ว formatted
@@ -230,10 +269,7 @@ export interface PaymentsStats {
   pendingAmount: number;       // ยอดรอชำระ raw
   failedAmount: number;        // ยอดที่ล้มเหลว raw
 }
-```
 
-#### Top Selling Packages Interface
-```typescript
 export interface TopSellingPackage {
   id: string;
   name: string;
@@ -246,41 +282,27 @@ export interface TopSellingPackage {
 }
 ```
 
-### Integration Points
-- `getDashboardStats()` - ดึงข้อมูล dashboard stats จากฐานข้อมูลจริง
-- `getTourBookingsStats()` - ดึงข้อมูล tour bookings stats จากฐานข้อมูลจริง
-- `getTourPackagesStats()` - ดึงข้อมูล tour packages stats จากฐานข้อมูลจริง
-- `getPaymentsStats()` - ดึงข้อมูล payments stats จากฐานข้อมูลจริง
-- `getTopSellingPackages()` - ดึงข้อมูล Top Selling Packages จากฐานข้อมูลจริง
-- Future: Tasks API สำหรับ Recent Tasks section
-
-## Performance Features
-
-### Server-Side Rendering
-- ทุก component เป็น async server component
-- ข้อมูลถูก fetch ที่ server ก่อนส่งไปยัง client
-- ลดเวลา loading และปรับปรุง SEO
-
-### Database Optimization
-- ใช้ JOIN query เพื่อดึงข้อมูล tour_products พร้อมกับ bookings
-- Sort และ filter ที่ระดับฐานข้อมูล
-- Limit ผลลัพธ์เป็น Top 5 เพื่อประสิทธิภาพ
-- การคำนวณที่เหมาะสมเพื่อลด database load
-
-## Real vs Mock Data Status
-
-### ✅ Real Database Data (เสร็จสิ้น)
-- Stats Summary (4 metrics)
-- Tour Bookings Card 
-- Tour Packages Card
-- Payments Card
-- Top Selling Packages
-
-### ⏳ Mock Data (รอพัฒนา)
-- Recent Tasks (ต้องสร้างตาราง tasks)
+### Tasks Interface  
+```typescript
+// Tasks interfaces remain the same but with enhanced display
+export interface TaskWithBookingInfo extends Record<string, any> {
+  id: number;
+  description: string;
+  due_date?: string | null;
+  status: string;
+  linked_tour_booking_id?: string | null;
+  created_at: string;
+  updated_at: string;
+  tour_package_bookings?: {
+    customer_name: string | null;
+    tour_products?: {
+      name: string | null;
+    } | null;
+  } | null;
+}
+```
 
 ## Future Enhancements
-- สร้างตาราง tasks สำหรับ Recent Tasks section
 - Real-time data updates ด้วย WebSocket
 - การแจ้งเตือน (Notifications)
 - Charts และ graphs สำหรับ sales analytics
@@ -292,4 +314,8 @@ export interface TopSellingPackage {
 - Customer behavior insights
 - Historical data comparison เพื่อคำนวณ growth percentages ที่แม่นยำ
 - Real rating system จากลูกค้า
-- Performance monitoring และ caching strategy 
+- Performance monitoring และ caching strategy
+- Task automation และ scheduling
+- Advanced task filtering และ sorting
+- Task templates สำหรับงานที่ทำซ้ำ
+- Task dependencies และ workflows 
