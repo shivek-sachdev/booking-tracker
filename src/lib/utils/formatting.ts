@@ -1,24 +1,28 @@
 import type { TourPackageStatus } from "@/lib/types/tours";
 
-// Format date as D MMM YYYY (e.g., 22 MAR 2019)
+// Thailand timezone constant
+const THAILAND_TIMEZONE = 'Asia/Bangkok';
+
+// Format date as D MMM YYYY (e.g., 22 MAR 2019) in Thailand timezone
 export const formatDate = (dateString: string | null | undefined): string => {
     if (!dateString) return '-';
     try {
         // Add T00:00:00 to ensure parsing as local date without unexpected timezone shifts
         const date = new Date(dateString + 'T00:00:00'); 
         if (isNaN(date.getTime())) return 'Invalid Date';
-        // Format using options for D MMM YYYY
+        // Format using options for D MMM YYYY in Thailand timezone
         return date.toLocaleDateString('en-GB', { 
             day: 'numeric', 
             month: 'short', 
-            year: 'numeric' 
+            year: 'numeric',
+            timeZone: THAILAND_TIMEZONE
         }).toUpperCase(); // Convert month abbr to uppercase
     } catch {
         return 'Invalid Date';
     }
 };
 
-// Format timestamp as Date + Time (e.g., Mar 4, 2025, 11:44 AM)
+// Format timestamp as Date + Time (e.g., Mar 4, 2025, 11:44 AM) in Thailand timezone
 export const formatTimestamp = (dateString: string | null | undefined): string => {
     if (!dateString) return '-';
     try {
@@ -29,7 +33,9 @@ export const formatTimestamp = (dateString: string | null | undefined): string =
             month: 'short', 
             day: 'numeric', 
             hour: 'numeric', 
-            minute: '2-digit' 
+            minute: '2-digit',
+            timeZone: THAILAND_TIMEZONE,
+            hour12: true
         });
     } catch {
         return 'Invalid Date';

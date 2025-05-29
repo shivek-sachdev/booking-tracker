@@ -27,6 +27,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Calendar } from '@/components/ui/calendar'
 import { cn } from '@/lib/utils'
+import { formatTimestamp } from '@/lib/utils/formatting'
 import {
   TourProduct,
   TourPackageStatusEnum,
@@ -113,9 +114,9 @@ export function TourPackageBookingForm({ initialBooking, products, onSuccess }: 
   const router = useRouter();
   const supabase = createClient();
   const isEditing = !!initialBooking?.id;
-  const [selectedFile, setSelectedFile] = React.useState<File | null>(null);
-  const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = React.useState(false);
+  const [selectedFiles, setSelectedFiles] = React.useState<File[]>([]);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [isViewUrlLoading, startViewUrlTransition] = React.useTransition();
   const [newAddon, setNewAddon] = React.useState({ name: '', amount: '' });
 
@@ -258,19 +259,26 @@ export function TourPackageBookingForm({ initialBooking, products, onSuccess }: 
   }, [watchedBasePrice, watchedPax, watchedAddons]);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (event.target.files && event.target.files[0]) {
-      const file = event.target.files[0];
-      if (file.size > 5 * 1024 * 1024) { // 5MB limit
-        toast.error("File size should not exceed 5MB.");
-        setSelectedFile(null);
-        if (fileInputRef.current) {
-            fileInputRef.current.value = ""; // Clear the input
+    if (event.target.files && event.target.files.length > 0) {
+      const files = Array.from(event.target.files);
+      const validFiles: File[] = [];
+      const invalidFiles: string[] = [];
+      
+      files.forEach(file => {
+        if (file.size > 5 * 1024 * 1024) { // 5MB limit
+          invalidFiles.push(file.name);
+        } else {
+          validFiles.push(file);
         }
-        return;
+      });
+      
+      if (invalidFiles.length > 0) {
+        toast.error(`These files exceed 5MB and were not selected: ${invalidFiles.join(', ')}`);
       }
-      setSelectedFile(file);
+      
+      setSelectedFiles(validFiles);
     } else {
-      setSelectedFile(null);
+      setSelectedFiles([]);
     }
   };
 
@@ -315,43 +323,51 @@ export function TourPackageBookingForm({ initialBooking, products, onSuccess }: 
       if (mainActionResult.message.startsWith('Success') || mainActionResult.message.startsWith('Successfully')) {
         toast.success(mainActionResult.message);
 
-        // Handle file upload if a file is selected and we have a booking ID
-        if (selectedFile && bookingIdToUse) {
-          toast.info("Uploading payment slip...");
-          // Use Date.now() for uniqueness instead of uuidv4()
-          const uniquePart = Date.now();
-          const fileName = `${bookingIdToUse}/${uniquePart}-${selectedFile.name.replace(/[^a-zA-Z0-9._-]/g, '')}`;
+        // Handle file upload if files are selected and we have a booking ID
+        if (selectedFiles.length > 0 && bookingIdToUse) {
+          toast.info("Uploading payment slips...");
+          let successfulUploads = 0;
           
-          const { data: uploadData, error: uploadError } = await supabase.storage
-            .from('payment-slips')
-            .upload(fileName, selectedFile, {
-              cacheControl: '3600',
-              upsert: false,
-            });
+          for (const file of selectedFiles) {
+            // Use Date.now() for uniqueness instead of uuidv4()
+            const uniquePart = Date.now() + Math.random().toString(36).substring(2, 8);
+            const fileName = `${bookingIdToUse}/${uniquePart}-${file.name.replace(/[^a-zA-Z0-9._-]/g, '')}`;
+            
+            const { data: uploadData, error: uploadError } = await supabase.storage
+              .from('payment-slips')
+              .upload(fileName, file, {
+                cacheControl: '3600',
+                upsert: false,
+              });
 
-          if (uploadError) {
-            toast.error(`Payment slip upload failed: ${uploadError.message}`);
-            // Continue even if slip upload fails, main booking data is saved.
-          } else if (uploadData?.path) {
-            const paymentResult = await addPaymentRecord(
-              bookingIdToUse,
-              values.status, // Current status from the form
-              uploadData.path
-            );
+            if (uploadError) {
+              toast.error(`Payment slip upload failed for ${file.name}: ${uploadError.message}`);
+              // Continue even if slip upload fails, main booking data is saved.
+            } else if (uploadData?.path) {
+              const paymentResult = await addPaymentRecord(
+                bookingIdToUse,
+                values.status, // Current status from the form
+                uploadData.path
+              );
 
-            if (paymentResult.success) {
-              toast.success("Payment record added successfully.");
-              setSelectedFile(null); // Clear selected file state
-              if (fileInputRef.current) {
-                fileInputRef.current.value = ""; // Clear file input
+              if (paymentResult.success) {
+                successfulUploads++;
+              } else {
+                toast.error(`Failed to add payment record for ${file.name}: ${paymentResult.message}`);
               }
-              if (bookingIdToUse) doFetchBookingPayments(); // Refresh payment list
-            } else {
-              toast.error(`Failed to add payment record: ${paymentResult.message}`);
             }
           }
-        } else if (selectedFile && !bookingIdToUse) {
-            toast.error("Could not upload payment slip: Booking ID is missing.");
+          
+          if (successfulUploads > 0) {
+            toast.success(`Successfully uploaded ${successfulUploads} payment slip${successfulUploads !== 1 ? 's' : ''}`);
+            setSelectedFiles([]); // Clear selected files state
+            if (fileInputRef.current) {
+              fileInputRef.current.value = ""; // Clear file input
+            }
+            if (bookingIdToUse) doFetchBookingPayments(); // Refresh payment list
+          }
+        } else if (selectedFiles.length > 0 && !bookingIdToUse) {
+            toast.error("Could not upload payment slips: Booking ID is missing.");
         }
 
         if (onSuccess) onSuccess();
@@ -951,7 +967,7 @@ export function TourPackageBookingForm({ initialBooking, products, onSuccess }: 
                           <li key={payment.id} className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-3 border rounded-md bg-slate-50 dark:bg-slate-800/30 gap-2">
                             <div className="flex-grow">
                               <p className="text-sm font-medium">
-                                Uploaded: {format(new Date(payment.uploaded_at), "PPp")}
+                                Uploaded: {formatTimestamp(payment.uploaded_at)}
                               </p>
                               <p className="text-xs text-muted-foreground">
                                 Status at Payment: {payment.status_at_payment}
@@ -1031,7 +1047,7 @@ export function TourPackageBookingForm({ initialBooking, products, onSuccess }: 
               {/* File Upload Section - Always available for new uploads */}
               <div className="md:col-span-2 space-y-2 border-t pt-6 mt-4">
                 <Label htmlFor="payment_slip_new_upload">
-                  Upload New Payment Slip (Max 5MB)
+                  Upload Payment Slips (Max 5MB each, multiple files allowed)
                 </Label>
                 <div className="flex items-center space-x-2">
                   <Input
@@ -1042,20 +1058,52 @@ export function TourPackageBookingForm({ initialBooking, products, onSuccess }: 
                     onChange={handleFileChange}
                     className="flex-grow"
                     disabled={isUploading}
+                    multiple
                   />
-                  {selectedFile && (
+                  {selectedFiles.length > 0 && (
                     <Button variant="ghost" size="icon" onClick={() => {
-                      setSelectedFile(null);
+                      setSelectedFiles([]);
                       if (fileInputRef.current) fileInputRef.current.value = "";
-                    }} aria-label="Clear selected file" disabled={isUploading}>
+                    }} aria-label="Clear selected files" disabled={isUploading}>
                       <XCircleIcon className="h-5 w-5 text-muted-foreground" />
                     </Button>
                   )}
                 </div>
-                {selectedFile && (
-                  <p className="text-sm text-muted-foreground">
-                    Selected: {selectedFile.name} ({(selectedFile.size / 1024 / 1024).toFixed(2)} MB) - This will be recorded with current status: <span className="font-semibold">{watchedStatus}</span>
-                  </p>
+                {selectedFiles.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium text-muted-foreground">
+                      Selected Files ({selectedFiles.length}) - Will be recorded with status: <span className="font-semibold">{watchedStatus}</span>
+                    </p>
+                    <div className="max-h-32 overflow-y-auto space-y-1">
+                      {selectedFiles.map((file, index) => (
+                        <div key={index} className="flex items-center justify-between p-2 border rounded-md bg-muted/50 text-sm">
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium truncate">{file.name}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {(file.size / 1024 / 1024).toFixed(2)} MB
+                            </p>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => {
+                              const newFiles = [...selectedFiles];
+                              newFiles.splice(index, 1);
+                              setSelectedFiles(newFiles);
+                              if (newFiles.length === 0 && fileInputRef.current) {
+                                fileInputRef.current.value = "";
+                              }
+                            }}
+                            className="h-6 w-6 ml-2"
+                            disabled={isUploading}
+                          >
+                            <XCircleIcon className="h-4 w-4 text-muted-foreground hover:text-destructive" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </div>
 

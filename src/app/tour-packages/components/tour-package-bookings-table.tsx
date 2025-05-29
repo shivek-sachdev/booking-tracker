@@ -37,31 +37,21 @@ import { Badge } from "@/components/ui/badge";
 
 import { type TourPackageBookingWithProduct, type TourPackageStatus } from "@/lib/types/tours";
 import { deleteTourPackageBooking } from "@/lib/actions/tour-package-bookings";
+import { formatDate, formatTimestamp, formatCurrency } from "@/lib/utils/formatting";
 
 // --- Helper Functions ---
-const formatDate = (dateString: string | null | undefined): string => {
-  if (!dateString) return '-';
-  try {
-    const date = new Date(dateString + 'T00:00:00');
-    return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-  } catch {
-    return 'Invalid Date';
-  }
-};
 
-const formatCurrency = (amount: number | null | undefined): string => {
-  if (amount === null || amount === undefined) return '-';
-  return new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB' }).format(amount);
-};
-
-// Format travel period concisely
+// Format travel period concisely with Thailand timezone
 const formatTravelPeriod = (startDateStr: string | null | undefined, endDateStr: string | null | undefined): string => {
   if (!startDateStr) return '-'; // No start date, can't determine period
 
   try {
     const startDate = new Date(startDateStr + 'T00:00:00');
     const startDay = startDate.getDate();
-    const startMonth = startDate.toLocaleString('en-US', { month: 'short' }).toUpperCase();
+    const startMonth = startDate.toLocaleDateString('en-US', { 
+      month: 'short',
+      timeZone: 'Asia/Bangkok'
+    }).toUpperCase();
 
     if (!endDateStr || startDateStr === endDateStr) {
       // Only start date or same start/end date
@@ -70,7 +60,10 @@ const formatTravelPeriod = (startDateStr: string | null | undefined, endDateStr:
 
     const endDate = new Date(endDateStr + 'T00:00:00');
     const endDay = endDate.getDate();
-    const endMonth = endDate.toLocaleString('en-US', { month: 'short' }).toUpperCase();
+    const endMonth = endDate.toLocaleDateString('en-US', { 
+      month: 'short',
+      timeZone: 'Asia/Bangkok'
+    }).toUpperCase();
 
     if (startMonth === endMonth) {
       // Same month

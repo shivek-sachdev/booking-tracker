@@ -35,13 +35,16 @@ function formatDate(date: string | null): string {
   return format(new Date(date), 'MMM d, yyyy');
 }
 
-// Helper function to format short date (e.g., 13APR)
+// Helper function to format short date (e.g., 13APR) with Thailand timezone
 function formatShortDate(dateString: string | null | undefined): string {
   if (!dateString) return "N/A";
   try {
     const date = new Date(dateString);
     const day = date.getDate();
-    const month = date.toLocaleString('en-US', { month: 'short' }).toUpperCase();
+    const month = date.toLocaleDateString('en-US', { 
+      month: 'short',
+      timeZone: 'Asia/Bangkok'
+    }).toUpperCase();
     return `${day}${month}`;
   } catch {
     return "N/A";

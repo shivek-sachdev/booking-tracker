@@ -31,13 +31,19 @@ const formatTravelPeriod = (startDateStr: string | null | undefined, endDateStr:
   try {
     const startDate = new Date(startDateStr + 'T00:00:00');
     const startDay = startDate.getDate();
-    const startMonth = startDate.toLocaleString('en-US', { month: 'short' }).toUpperCase();
+    const startMonth = startDate.toLocaleDateString('en-US', { 
+      month: 'short',
+      timeZone: 'Asia/Bangkok'
+    }).toUpperCase();
     if (!endDateStr || startDateStr === endDateStr) {
       return `${startDay} ${startMonth}`;
     }
     const endDate = new Date(endDateStr + 'T00:00:00');
     const endDay = endDate.getDate();
-    const endMonth = endDate.toLocaleString('en-US', { month: 'short' }).toUpperCase();
+    const endMonth = endDate.toLocaleDateString('en-US', { 
+      month: 'short',
+      timeZone: 'Asia/Bangkok'
+    }).toUpperCase();
     if (startMonth === endMonth) {
       return `${startDay}-${endDay} ${startMonth}`;
     } else {
