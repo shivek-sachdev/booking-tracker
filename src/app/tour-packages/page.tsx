@@ -1,5 +1,5 @@
 import { Suspense } from 'react';
-import { getTourPackageBookings } from '@/lib/actions/tour-package-bookings';
+import { getTourPackageBookingsExcludingStatuses } from '@/lib/actions/tour-package-bookings';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { PlusCircle } from 'lucide-react';
@@ -8,8 +8,8 @@ import { DataTableSkeleton } from '@/components/data-table-skeleton';
 import type { TourPackageBookingWithProduct } from '@/lib/types/tours';
 
 export default async function TourPackageBookingsPage() {
-  // Fetching data directly in RSC
-  const bookingsPromise = getTourPackageBookings(); // Fetches bookings with product name
+  // Exclude finalized statuses from All
+  const bookingsPromise = getTourPackageBookingsExcludingStatuses(['Complete', 'Closed']);
 
   return (
     <div className="container mx-auto py-10">

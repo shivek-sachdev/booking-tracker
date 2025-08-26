@@ -119,21 +119,47 @@ export function MainLayout({ children }: MainLayoutProps) {
             const isActive = pathname === item.path || pathname.startsWith(`${item.path}/`);
             
             return (
-              <Button 
-                key={item.path}
-                variant={isActive ? "secondary" : "ghost"} 
-                className={cn(
-                  "w-full justify-start mb-1",
-                  isActive && "bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300"
+              <div key={item.path} className="mb-1">
+                <Button 
+                  variant={isActive ? "secondary" : "ghost"} 
+                  className={cn(
+                    "w-full justify-start",
+                    isActive && "bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300"
+                  )}
+                  asChild
+                >
+                  <Link href={item.path} className="flex items-center" onClick={closeMobileMenu}>
+                    <span className="mr-2">{item.icon}</span> 
+                    <span>{item.label}</span>
+                    {isActive && <ChevronRight className="ml-auto h-4 w-4" />}
+                  </Link>
+                </Button>
+                {/* Nested links under Tour Bookings when active */}
+                {isActive && item.path === '/tour-packages' && (
+                  <div className="ml-8 mt-1 space-y-1">
+                    {[
+                      { href: '/tour-packages', label: 'All' },
+                      { href: '/tour-packages/completed', label: 'Completed' },
+                      { href: '/tour-packages/closed', label: 'Closed' },
+                    ].map((sub) => {
+                      const subActive = pathname === sub.href;
+                      return (
+                        <Link
+                          key={sub.href}
+                          href={sub.href}
+                          className={cn(
+                            "block px-3 py-1 rounded text-sm hover:bg-muted",
+                            subActive && "bg-muted font-medium"
+                          )}
+                          onClick={closeMobileMenu}
+                        >
+                          {sub.label}
+                        </Link>
+                      );
+                    })}
+                  </div>
                 )}
-                asChild
-              >
-                <Link href={item.path} className="flex items-center" onClick={closeMobileMenu}>
-                  <span className="mr-2">{item.icon}</span> 
-                  <span>{item.label}</span>
-                  {isActive && <ChevronRight className="ml-auto h-4 w-4" />}
-                </Link>
-              </Button>
+              </div>
             );
           })}
 

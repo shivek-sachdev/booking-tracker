@@ -10,7 +10,8 @@ import {
   type TourPackageBookingWithProduct, 
   type PaymentRecord, 
   TourPackageStatusEnum,
-  type LinkedBookingInfo 
+  type LinkedBookingInfo,
+  type TourPackageStatus 
 } from '@/lib/types/tours';
 import crypto from 'crypto'; // Import crypto for random bytes
 import { z } from 'zod';
@@ -539,6 +540,69 @@ export async function getTourPackageBookings(): Promise<TourPackageBookingWithPr
   }
   
   // Use safer type assertion
+  return (data as unknown as TourPackageBookingWithProduct[]) || [];
+}
+
+// Filtered fetch by one or more statuses
+export async function getTourPackageBookingsByStatuses(statuses: TourPackageStatus[]): Promise<TourPackageBookingWithProduct[]> {
+  const supabase = createSimpleServerClient();
+  let query = supabase
+    .from('tour_package_bookings')
+    .select(`
+      id, customer_name, tour_product_id,
+      base_price_per_pax,
+      addons,
+      total_per_pax,
+      grand_total,
+      pax, status, booking_date, travel_start_date, travel_end_date, notes, created_at, updated_at,
+      linked_booking_id,
+      tour_products ( name )
+    `)
+    .order('updated_at', { ascending: false })
+    .order('booking_date', { ascending: false, nullsFirst: false });
+
+  if (statuses && statuses.length > 0) {
+    query = query.in('status', statuses as unknown as string[]);
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    console.error('Database Error fetching filtered tour package bookings:', error);
+    return [];
+  }
+  return (data as unknown as TourPackageBookingWithProduct[]) || [];
+}
+
+// Fetch excluding one or more statuses
+export async function getTourPackageBookingsExcludingStatuses(statuses: TourPackageStatus[]): Promise<TourPackageBookingWithProduct[]> {
+  const supabase = createSimpleServerClient();
+  let query = supabase
+    .from('tour_package_bookings')
+    .select(`
+      id, customer_name, tour_product_id,
+      base_price_per_pax,
+      addons,
+      total_per_pax,
+      grand_total,
+      pax, status, booking_date, travel_start_date, travel_end_date, notes, created_at, updated_at,
+      linked_booking_id,
+      tour_products ( name )
+    `)
+    .order('updated_at', { ascending: false })
+    .order('booking_date', { ascending: false, nullsFirst: false });
+
+  if (statuses && statuses.length > 0) {
+    // Chain .neq for each excluded status for clarity and RLS-compatibility
+    statuses.forEach((s) => {
+      query = query.neq('status', s as unknown as string);
+    });
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    console.error('Database Error fetching tour package bookings (excluding statuses):', error);
+    return [];
+  }
   return (data as unknown as TourPackageBookingWithProduct[]) || [];
 }
 
