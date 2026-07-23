@@ -17,7 +17,8 @@ import {
   Map,
   LogOut,
   CreditCard,
-  ListTodo
+  ListTodo,
+  NotebookPen,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Separator } from "@/components/ui/separator";
@@ -56,6 +57,7 @@ export function MainLayout({ children }: MainLayoutProps) {
   const tourNavItems = [
     { path: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard className="h-4 w-4" /> },
     { path: '/tasks', label: 'Tasks', icon: <ListTodo className="h-4 w-4" /> },
+    { path: '/call-reports', label: 'Call Reports', icon: <NotebookPen className="h-4 w-4" /> },
     { path: '/tour-packages', label: 'Tour Bookings', icon: <ClipboardCheck className="h-4 w-4" /> },
     { path: '/tour-products', label:'Tour Packages', icon: <Map className="h-4 w-4" /> },
   ];
